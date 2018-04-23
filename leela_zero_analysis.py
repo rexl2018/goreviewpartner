@@ -264,7 +264,7 @@ class Leela_Zero_gtp(gtp):
 		while 1:
 			try:
 				err_line=self.stderr_starting_queue.get(True,delay)
-				
+				log(err_line)
 				delay=1
 				if "Started OpenCL SGEMM tuner." in err_line:
 					log("OpenCL SGEMM tuner is running")
