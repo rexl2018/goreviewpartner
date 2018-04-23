@@ -247,7 +247,7 @@ class Leela_Zero_gtp(gtp):
 		
 		if leela_zero_working_directory:
 			log("Leela Zero working directory:",leela_zero_working_directory)
-			self.process=subprocess.Popen(command,cwd=leela_zero_working_directory, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+			self.process=subprocess.Popen(self.command_line,cwd=leela_zero_working_directory, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		else:
 			self.process=subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		self.size=0
