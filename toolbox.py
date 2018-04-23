@@ -1193,10 +1193,8 @@ def bot_starting_procedure(bot_name,bot_gtp_name,bot_gtp,sgf_g,profile="slow",si
 		log("Starting "+bot_name+"...")
 		try:
 			bot_command_line=[Config.get(bot_name, command_entry)]+Config.get(bot_name, parameters_entry).split()
-			log(bot_command_line)
 			bot=bot_gtp(bot_command_line)
 		except Exception,e:
-			log(str(e))
 			raise LaunchingException((_("Could not run %s using the command from config.ini file:")%bot_name)+"\n"+Config.get(bot_name, command_entry)+" "+Config.get(bot_name, parameters_entry)+"\n"+str(e))
 
 		log(bot_name+" started")
