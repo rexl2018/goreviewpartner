@@ -159,7 +159,7 @@ class LeelaZeroAnalysis():
 		return leela_zero
 
 def leela_zero_starting_procedure(sgf_g,profile="slow",silentfail=False):
-	log("leela_zero_starting_procedure() 1")
+    log("leela_zero_starting_procedure() 1")
 	if profile=="slow":
 		timepermove_entry="SlowTimePerMove"
 	elif profile=="fast":
@@ -167,11 +167,11 @@ def leela_zero_starting_procedure(sgf_g,profile="slow",silentfail=False):
 
 	Config = ConfigParser.ConfigParser()
 	Config.read(config_file)
-
-	log("leela_zero_starting_procedure() 2")
+    
+    log("leela_zero_starting_procedure() 2")
 	leela_zero=bot_starting_procedure("LeelaZero","Leela Zero",Leela_Zero_gtp,sgf_g,profile,silentfail)
 	
-	log("leela_zero_starting_procedure() 3")
+    log("leela_zero_starting_procedure() 3")
 	if not leela_zero:
 		return False
 	try:
@@ -188,7 +188,7 @@ def leela_zero_starting_procedure(sgf_g,profile="slow",silentfail=False):
 		Config.set("LeelaZero",timepermove_entry,"")
 		Config.write(open(config_file,"w"))
 	
-	log("leela_zero_starting_procedure() 4")
+    log("leela_zero_starting_procedure() 4")
 	return leela_zero
 
 
