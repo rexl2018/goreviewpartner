@@ -110,7 +110,8 @@ class Goban(Canvas):
 	def __init__(self,dim,**kwargs):
 		self.dim=dim
 		self.space=space
-		self.wood_color=(214,174,114) #same as gogui
+		#self.wood_color=(214,174,114) #same as gogui
+		self.wood_color=(255,255,255)
 		Canvas.__init__(self,**kwargs)
 		
 		self.anchor_x=0
@@ -148,7 +149,8 @@ class Goban(Canvas):
 			x2=0-.5+k1*dim
 			y2=dim-1+.5
 			
-			self.wood.append([y1,(x1+x2)/2+random()-0.5,y2,(x1+x2)/2+random()-0.5,'#%02x%02x%02x' % (r0, g0, b0),(k1-k0)*dim])
+			#self.wood.append([y1,(x1+x2)/2+random()-0.5,y2,(x1+x2)/2+random()-0.5,'#%02x%02x%02x' % (r0, g0, b0),(k1-k0)*dim])
+			self.wood.append([y1,(x1+x2)/2+random()-0.5,y2,(x1+x2)/2+random()-0.5,'#%02x%02x%02x' % (255, 255, 255),(k1-k0)*dim])
 			
 			k0=k1
 			k1+=0.005+random()*0.01

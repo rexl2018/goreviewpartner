@@ -2129,11 +2129,11 @@ class DualView(Toplevel):
 		self.status_bar.config(text="")
 
 	def save_left_as_png(self,event=None):
-		filename = save_png_file(parent=self,filename='move'+str(self.current_move)+'.png')
+		filename = save_png_file(parent=self,filename=self.filename+'_'+str(self.current_move)+'.png')
 		canvas2png(self.goban1,filename)
 
 	def save_right_as_png(self,event=None):
-		filename = save_png_file(parent=self,filename='move'+str(self.current_move)+'.png')
+		filename = save_png_file(parent=self,filename=self.filename+'_'+str(self.current_move)+'_v.png')
 		canvas2png(self.goban2,filename)
 	
 from gomill import sgf, sgf_moves
