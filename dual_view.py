@@ -1289,6 +1289,8 @@ class DualView(Toplevel):
 		self.parent=parent
 		self.filename=filename
 		self.goban_size=goban_size
+
+		self.leaving_var = True
 		
 		global Config, goban
 		Config = ConfigParser.ConfigParser()
@@ -1386,6 +1388,9 @@ class DualView(Toplevel):
 		self.update_idletasks()
 		
 	def leave_variation(self,goban,grid,markup):
+		print "leave_variation"
+		if not self.leaving_var:
+			return
 		self.comment_box2.delete(1.0, END)
 		self.comment_box2.insert(END,self.game_comments)
 		self.parent.bind("<Up>", lambda e: None)
@@ -2133,8 +2138,11 @@ class DualView(Toplevel):
 		canvas2png(self.goban1,filename)
 
 	def save_right_as_png(self,event=None):
+		print "save_right_as_png"
+		self.leaving_var=False
 		filename = save_png_file(parent=self,filename=os.path.splitext(self.filename)[0]+'_'+str(self.current_move)+'_v.png')
 		canvas2png(self.goban2,filename)
+		self.leaving_var=True
 	
 from gomill import sgf, sgf_moves
 import goban
