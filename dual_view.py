@@ -1388,7 +1388,6 @@ class DualView(Toplevel):
 		self.update_idletasks()
 		
 	def leave_variation(self,goban,grid,markup):
-		print "leave_variation"
 		if not self.leaving_var:
 			return
 		self.comment_box2.delete(1.0, END)
@@ -1758,7 +1757,11 @@ class DualView(Toplevel):
 			else: c=2
 			if m==0:
 				real_game_ij=ij
-				main_sequence.append([c,ij,"A",None,"black","black"])
+				#main_sequence.append([c,ij,"A",None,"black","black"])
+				if c==1:
+					main_sequence.append([c,ij,"?",None,"white","purple"])
+				else:
+					main_sequence.append([c,ij,"?",None,"white","purple"])
 			else:
 				main_sequence.append([c,ij])
 		
@@ -2138,7 +2141,6 @@ class DualView(Toplevel):
 		canvas2png(self.goban1,filename)
 
 	def save_right_as_png(self,event=None):
-		print "save_right_as_png"
 		self.leaving_var=False
 		filename = save_png_file(parent=self,filename=os.path.splitext(self.filename)[0]+'_'+str(self.current_move)+'_v.png')
 		canvas2png(self.goban2,filename)
