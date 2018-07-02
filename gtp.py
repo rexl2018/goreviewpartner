@@ -1,25 +1,27 @@
-import subprocess
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
+import subprocess,sys
 import threading, Queue
 
 from time import sleep,time
 
-from toolbox import log
-
-class GtpException(Exception):
-	pass
+from toolbox import log,GRPException
 
 class gtp():
 	def __init__(self,command):
 		self.c=1
+		self.command_line=command[0]+" "+" ".join(command[1:])
+		command=[c.encode(sys.getfilesystemencoding()) for c in command]
 		self.process=subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		self.size=0
-		self.command_line=command[0]+" "+" ".join(command[1:])
 		self.stderr_queue=Queue.Queue()
 		self.stdout_queue=Queue.Queue()
 		threading.Thread(target=self.consume_stderr).start()
-		
+		self.free_handicap_stones=[]
+		self.history=[]
+
 	####low level function####
-	
 	def consume_stderr(self):
 		while 1:
 			try:
@@ -54,7 +56,7 @@ class gtp():
 		try:
 			self.process.stdin.write(txt+"\n")
 		except Exception, e:
-			log("Error while writting to stdin\n"+str(e))
+			log("Error while writting to stdin\n"+unicode(e))
 		#self.process.stdin.write(str(self.c)+" "+txt+"\n")
 		self.c+=1
 
@@ -81,14 +83,70 @@ class gtp():
 	def komi(self,k):
 		self.write("komi "+str(k))
 		answer=self.readline()
-		if answer[0]=="=":return True
+		if answer[0]=="=":
+			self.komi_value=k
+			return True
 		else:return False	
 
 	def place_black(self,move):
 		self.write("play black "+move)
 		answer=self.readline()
-		if answer[0]=="=":return True
+		if answer[0]=="=":
+			self.history.append(["b",move])
+			return True
 		else:return False	
+	
+	def place_white(self,move):
+		self.write("play white "+move)
+		answer=self.readline()
+		if answer[0]=="=":
+			self.history.append(["w",move])
+			return True
+		else:return False
+
+
+	def play_black(self):
+		self.write("genmove black")
+		answer=self.readline().strip()
+		try:
+			move=answer.split(" ")[1]
+			self.history.append(["b",move])
+			return move
+		except Exception, e:
+			raise GRPException("GRPException in genmove_black()\nanswer='"+answer+"'\n"+unicode(e))
+
+		
+	def play_white(self):
+		self.write("genmove white")
+		answer=self.readline().strip()
+		try:
+			move=answer.split(" ")[1]
+			self.history.append(["w",move])
+			return move
+		except Exception, e:
+			raise GRPException("GRPException in genmove_white()\nanswer='"+answer+"'\n"+unicode(e))
+
+
+	def undo(self):
+		self.reset()
+		self.komi(self.komi_value)
+		try:
+			#adding handicap stones
+			if len(self.free_handicap_stones)>0:
+				self.set_free_handicap(self.free_handicap_stones)
+			self.history.pop()
+			history=self.history[:]
+			self.history=[]
+			for color,move in history:
+				if color=="b":
+					if not self.place_black(move):
+						return False
+				else:
+					if not self.place_white(move):
+						return False
+			return True			
+		except Exception, e:
+			raise GRPException("GRPException in undo()\n"+unicode(e))
 	
 	def place(self,move,color):
 		if color==1:
@@ -96,19 +154,13 @@ class gtp():
 		else:
 			return self.place_white(move)
 	
-	def place_white(self,move):
-		self.write("play white "+move)
-		answer=self.readline()
-		if answer[0]=="=":return True
-		else:return False
-	
 	def name(self):
 		self.write("name")
 		answer=self.readline().strip()
 		try:
 			return " ".join(answer.split(" ")[1:])
 		except Exception, e:
-			raise GtpException("GtpException in name()\nanswer='"+answer+"'\n"+str(e))
+			raise GRPException("GRPException in name()\nanswer='"+answer+"'\n"+unicode(e))
 	
 	def version(self):
 		self.write("version")
@@ -116,30 +168,14 @@ class gtp():
 		try:
 			return answer.split(" ")[1]
 		except Exception,e:
-			raise GtpException("GtpException in version()\nanswer='"+answer+"'\n"+str(e))
+			raise GRPException("GRPException in version()\nanswer='"+answer+"'\n"+unicode(e))
 
-	def play_black(self):
-		self.write("genmove black")
-		answer=self.readline().strip()
-		try:
-			return answer.split(" ")[1]
-		except Exception, e:
-			raise GtpException("GtpException in genmove_black()\nanswer='"+answer+"'\n"+str(e))
-
-		
-	def play_white(self):
-		self.write("genmove white")
-		answer=self.readline().strip()
-		try:
-			return answer.split(" ")[1]
-		except Exception, e:
-			raise GtpException("GtpException in genmove_white()\nanswer='"+answer+"'\n"+str(e))
 
 	def set_free_handicap(self,positions):
+		self.free_handicap_stones=positions[:]
 		stones=""
 		for p in positions:
 			stones+=p+" "
-		log("Setting handicap stones at",stones.strip())
 		self.write("set_free_handicap "+stones.strip())
 		answer=self.readline().strip()
 		try:
@@ -148,13 +184,9 @@ class gtp():
 			else:
 				return False	
 		except Exception, e:
-			raise GtpException("GtpException in set_free_handicap()\nanswer='"+answer+"'\n"+str(e))
+			raise GRPException("GRPException in set_free_handicap()\nanswer='"+answer+"'\n"+unicode(e))
 	
-	def undo_resign(self):
-		#just do nothing
-		pass
-	
-	def undo(self):
+	def undo_standard(self):
 		self.write("undo")
 		answer=self.readline()
 		try:
@@ -163,8 +195,8 @@ class gtp():
 			else:
 				return False			
 		except Exception, e:
-			raise GtpException("GtpException in undo()\nanswer='"+answer+"'\n"+str(e))
-
+			raise GRPException("GRPException in undo()\nanswer='"+answer+"'\n"+unicode(e))
+	
 	def countlib(self,move):
 		self.write("countlib "+move)
 		answer=self.readline()
@@ -190,7 +222,7 @@ class gtp():
 			if answer[0]=="=":return True
 			else:return False
 		except Exception, e:
-			raise GtpException("GtpException in set_time()\nanswer='"+answer+"'\n"+str(e))
+			raise GRPException("GRPException in set_time()\nanswer='"+answer+"'\n"+unicode(e))
 
 	def quit(self):
 		self.write("quit")
@@ -223,7 +255,3 @@ class gtp():
 		self.quitting_thread=threading.Thread(target=self.quit)
 		self.quitting_thread.start()
 		threading.Thread(target=self.terminate).start()
-
-
-
-

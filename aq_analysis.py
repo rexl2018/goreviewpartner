@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
-
-from gtp import gtp, GtpException
+from gtp import gtp
 import sys
 from gomill import sgf, sgf_moves
 
@@ -10,10 +10,6 @@ from sys import exit,argv
 from Tkinter import *
 
 import sys
-import os
-
-import ConfigParser
-
 from time import sleep
 import os
 import threading
@@ -55,10 +51,10 @@ class AQAnalysis():
 		if current_move>1:
 			es=aq.final_score()
 			#one_move.set("ES",es)
-			save_position_data(one_move,"ES",es)
+			node_set(one_move,"ES",es)
 
 		log("AQ preferred move:",answer)
-		save_position_data(one_move,"CBM",answer) #Computer Best Move
+		node_set(one_move,"CBM",answer) #Computer Best Move
 
 		all_moves=aq.get_all_aq_moves()
 
@@ -83,7 +79,7 @@ class AQAnalysis():
 						break
 					i,j=gtp2ij(one_deep_move)
 					new_child=previous_move.new_child()
-					new_child.set_move(current_color,(i,j))
+					node_set(new_child,current_color,(i,j))
 
 
 					if player_color=='b':
@@ -97,19 +93,18 @@ class AQAnalysis():
 
 					if first_variation_move:
 						first_variation_move=False
-						save_variation_data(new_child,"BWWR",bwwr)
-						save_variation_data(new_child,"PLYO",str(count))
-						save_variation_data(new_child,"VNWR",vnwr)
-						save_variation_data(new_child,"MCWR",mcwr)
-						save_variation_data(new_child,"PNV",str(prob)+"%")
+						node_set(new_child,"BWWR",bwwr)
+						node_set(new_child,"PLYO",str(count))
+						node_set(new_child,"VNWR",vnwr)
+						node_set(new_child,"MCWR",mcwr)
+						node_set(new_child,"PNV",str(prob)+"%")
 
 
 					if best_move:
 						best_move=False
-
-						save_position_data(one_move,"BWWR",bwwr)
-						save_position_data(one_move,"MCWR",mcwr)
-						save_position_data(one_move,"VNWR",vnwr)
+						node_set(one_move,"BWWR",bwwr)
+						node_set(one_move,"MCWR",mcwr)
+						node_set(one_move,"VNWR",vnwr)
 						
 					previous_move=new_child
 					if current_color in ('w','W'):
@@ -120,11 +115,8 @@ class AQAnalysis():
 			aq.undo()
 		else:
 			log('adding "'+answer.lower()+'" to the sgf file')
-			# additional_comments+="\n"+_("For this position, %s would %s"%("AQ",answer.lower()))
-			if answer.lower()=="pass":
-				aq.undo()
-			elif answer.lower()=="resign":
-				aq.undo_resign()
+			aq.undo()
+
 
 		return answer
 
@@ -139,8 +131,8 @@ def aq_starting_procedure(sgf_g,profile="slow",silentfail=False):
 
 
 class RunAnalysis(AQAnalysis,RunAnalysisBase):
-	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile="slow"):
-		RunAnalysisBase.__init__(self,parent,filename,move_range,intervals,variation,komi,profile)
+	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile="slow",existing_variations="remove_everything"):
+		RunAnalysisBase.__init__(self,parent,filename,move_range,intervals,variation,komi,profile,existing_variations)
 
 class LiveAnalysis(AQAnalysis,LiveAnalysisBase):
 	def __init__(self,g,filename,profile="slow"):
@@ -157,100 +149,32 @@ class AQ_gtp(gtp):
 
 	def __init__(self,command):
 		self.c=1
-
 		aq_working_directory=command[0][:-len(ntpath.basename(command[0]))]
-		
+		self.command_line=command[0]+" "+" ".join(command[1:])
+		command=[c.encode(sys.getfilesystemencoding()) for c in command]
+		aq_working_directory=aq_working_directory.encode(sys.getfilesystemencoding())
 		if aq_working_directory:
 			log("AQ working directory:",aq_working_directory)
 			self.process=subprocess.Popen(command,cwd=aq_working_directory, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		else:
 			self.process=subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		
 		self.size=0
-
 		self.stderr_queue=Queue.Queue()
 		self.stdout_queue=Queue.Queue()
 		
 		threading.Thread(target=self.consume_stderr).start()
 
 		self.history=[]
-
-	def place_black(self,move):
-		self.write("play black "+move)
-		answer=self.readline()
-		if answer[0]=="=":
-			self.history.append(["b",move])
-			return True
-		else:return False
-
-	def place_white(self,move):
-		self.write("play white "+move)
-		answer=self.readline()
-		if answer[0]=="=":
-			self.history.append(["w",move])
-			return True
-		else:return False
-
-
-	def play_black(self):
-		self.write("genmove black")
-		answer=self.readline().strip()
-		try:
-			move=answer.split(" ")[1]
-			if move.lower()!="resign":
-				self.history.append(["b",move])
-			return move
-		except Exception, e:
-			raise GtpException("GtpException in genmove_black()\nanswer='"+answer+"'\n"+str(e))
-
-
-	def play_white(self):
-		self.write("genmove white")
-		answer=self.readline().strip()
-		try:
-			move=answer.split(" ")[1]
-			if move.lower()!="resign":
-				self.history.append(["w",move])
-			return move
-		except Exception, e:
-			raise GtpException("GtpException in genmove_white()\nanswer='"+answer+"'\n"+str(e))
-
-
-	def undo(self):
-		self.write("clear_board")
-		answer=self.readline()
-		try:
-			if answer[0]!="=":
-				return False
-			self.history.pop()
-			history=self.history[:]
-			self.history=[]
-			for color,move in history:
-				if color=="b":
-					if not self.place_black(move):
-						return False
-				else:
-					if not self.place_white(move):
-						return False
-			return True
-		except Exception, e:
-			raise GtpException("GtpException in undo()\n"+str(e))
+		self.free_handicap_stones=[]
 
 	def quick_evaluation(self,color):
 		if color==2:
-			answer=self.play_white()
+			self.play_white()
 		else:
-			answer=self.play_black()
-		
+			self.play_black()
 		all_moves=self.get_all_aq_moves()
+		self.undo()
 
-		if answer.lower()=="pass":
-			self.undo()
-		elif answer.lower()=="resign":
-			self.undo_resign()
-		else:
-			self.undo()
-		
 		txt=""
 		try:
 			if color==1:
@@ -322,8 +246,6 @@ class AQSettings(Frame):
 		Frame.__init__(self,parent)
 		self.parent=parent
 		log("Initializing AQ setting interface")
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
 
 		bot="AQ"
 
@@ -337,12 +259,12 @@ class AQSettings(Frame):
 		row+=1
 		Label(self,text=_("Command")).grid(row=row,column=1,sticky=W)
 		SlowCommand = StringVar()
-		SlowCommand.set(Config.get(bot,"SlowCommand"))
+		SlowCommand.set(grp_config.get(bot,"SlowCommand"))
 		Entry(self, textvariable=SlowCommand, width=30).grid(row=row,column=2)
 		row+=1
 		Label(self,text=_("Parameters")).grid(row=row,column=1,sticky=W)
 		SlowParameters = StringVar()
-		SlowParameters.set(Config.get(bot,"SlowParameters"))
+		SlowParameters.set(grp_config.get(bot,"SlowParameters"))
 		Entry(self, textvariable=SlowParameters, width=30).grid(row=row,column=2)
 		row+=1
 		Button(self, text=_("Test"),command=lambda: self.parent.parent.test(AQ_gtp,"slow")).grid(row=row,column=1,sticky=W)
@@ -356,12 +278,12 @@ class AQSettings(Frame):
 		row+=1
 		Label(self,text=_("Command")).grid(row=row,column=1,sticky=W)
 		FastCommand = StringVar()
-		FastCommand.set(Config.get(bot,"FastCommand"))
+		FastCommand.set(grp_config.get(bot,"FastCommand"))
 		Entry(self, textvariable=FastCommand, width=30).grid(row=row,column=2)
 		row+=1
 		Label(self,text=_("Parameters")).grid(row=row,column=1,sticky=W)
 		FastParameters = StringVar()
-		FastParameters.set(Config.get(bot,"FastParameters"))
+		FastParameters.set(grp_config.get(bot,"FastParameters"))
 		Entry(self, textvariable=FastParameters, width=30).grid(row=row,column=2)
 		row+=1
 		Button(self, text=_("Test"),command=lambda: self.parent.parent.test(AQ_gtp,"fast")).grid(row=row,column=1,sticky=W)
@@ -376,31 +298,31 @@ class AQSettings(Frame):
 
 		Label(self,text=_("Static analysis")).grid(row=row,column=1,sticky=W)
 		analysis_bot = StringVar()
-		analysis_bot.set(value[Config.get(bot,"AnalysisBot")])
+		analysis_bot.set(value[grp_config.get(bot,"AnalysisBot")])
 		OptionMenu(self,analysis_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 
 		row+=1
 		Label(self,text=_("Live analysis")).grid(row=row,column=1,sticky=W)
 		liveanalysis_bot = StringVar()
-		liveanalysis_bot.set(value[Config.get(bot,"LiveAnalysisBot")])
+		liveanalysis_bot.set(value[grp_config.get(bot,"LiveAnalysisBot")])
 		OptionMenu(self,liveanalysis_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 
 		row+=1
 		Label(self,text=_("Live analysis as black or white")).grid(row=row,column=1,sticky=W)
 		liveplayer_bot = StringVar()
-		liveplayer_bot.set(value[Config.get(bot,"LivePlayerBot")])
+		liveplayer_bot.set(value[grp_config.get(bot,"LivePlayerBot")])
 		OptionMenu(self,liveplayer_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 
 		row+=1
 		Label(self,text=_("When opening a position for manual play")).grid(row=row,column=1,sticky=W)
 		review_bot = StringVar()
-		review_bot.set(value[Config.get(bot,"ReviewBot")])
+		review_bot.set(value[grp_config.get(bot,"ReviewBot")])
 		OptionMenu(self,review_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 
 		row+=1
 		Label(self,text="").grid(row=row,column=1)
 		row+=1
-		Label(self,text=_("See AQ parameters in aq_config.txt")).grid(row=row,column=1,columnspan=2,sticky=W)
+		Label(self,text=_("See AQ parameters in \"aq_config.txt\"")).grid(row=row,column=1,columnspan=2,sticky=W)
 
 		self.SlowCommand=SlowCommand
 		self.SlowParameters=SlowParameters
@@ -414,24 +336,21 @@ class AQSettings(Frame):
 
 	def save(self):
 		log("Saving AQ settings")
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
 
 		bot="AQ"
 
-		Config.set(bot,"SlowCommand",self.SlowCommand.get())
-		Config.set(bot,"SlowParameters",self.SlowParameters.get())
-		Config.set(bot,"FastCommand",self.FastCommand.get())
-		Config.set(bot,"FastParameters",self.FastParameters.get())
+		grp_config.set(bot,"SlowCommand",self.SlowCommand.get())
+		grp_config.set(bot,"SlowParameters",self.SlowParameters.get())
+		grp_config.set(bot,"FastCommand",self.FastCommand.get())
+		grp_config.set(bot,"FastParameters",self.FastParameters.get())
 
 		value={_("Slow profile"):"slow",_("Fast profile"):"fast",_("Both profiles"):"both",_("None"):"none"}
 
-		Config.set(bot,"AnalysisBot",value[self.analysis_bot.get()])
-		Config.set(bot,"LiveanalysisBot",value[self.liveanalysis_bot.get()])
-		Config.set(bot,"LivePlayerBot",value[self.liveplayer_bot.get()])
-		Config.set(bot,"ReviewBot",value[self.review_bot.get()])
+		grp_config.set(bot,"AnalysisBot",value[self.analysis_bot.get()])
+		grp_config.set(bot,"LiveanalysisBot",value[self.liveanalysis_bot.get()])
+		grp_config.set(bot,"LivePlayerBot",value[self.liveplayer_bot.get()])
+		grp_config.set(bot,"ReviewBot",value[self.review_bot.get()])
 
-		Config.write(open(config_file,"w"))
 
 		if self.parent.parent.refresh!=None:
 			self.parent.parent.refresh()
@@ -479,7 +398,7 @@ if __name__ == "__main__":
 		try:
 			parameters=getopt.getopt(argv[1:], '', ['no-gui','range=', 'color=', 'komi=',"variation=", "profil="])
 		except Exception, e:
-			show_error(str(e)+"\n"+usage)
+			show_error(unicode(e)+"\n"+usage)
 			sys.exit()
 		
 		if not parameters[1]:
@@ -491,16 +410,16 @@ if __name__ == "__main__":
 		
 		for filename in parameters[1]:
 			move_selection,intervals,variation,komi,nogui,profil=parse_command_line(filename,parameters[0])
+			filename2=".".join(filename.split(".")[:-1])+".rsgf"
 			if nogui:
-				log("File to analyse:",filename)
-				popup=RunAnalysis("no-gui",filename,move_selection,intervals,variation-1,komi,profil)
+				popup=RunAnalysis("no-gui",[filename,filename2],move_selection,intervals,variation-1,komi,profil)
 				popup.terminate_bot()
 			else:
 				if not app:
 					app = Application()
-				one_analysis=[RunAnalysis,filename,move_selection,intervals,variation-1,komi,profil]
+				one_analysis=[RunAnalysis,[filename,filename2],move_selection,intervals,variation-1,komi,profil]
 				batch.append(one_analysis)
-		
+	
 		if not nogui:
 			app.after(100,lambda: batch_analysis(app,batch))
 			app.mainloop()

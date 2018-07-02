@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
 from Tkinter import *
 
@@ -19,7 +20,9 @@ class Terminal(Toplevel):
 		try:
 			self.bot=bot_gtp(bot_command_line)
 		except Exception, e:
-			show_error(_("Could not run the program:")+"\n"+str(e),self.parent)
+			self.close()
+			show_error(_("Could not run the program:")+"\n"+unicode(e),self.parent)
+			return
 			
 		threading.Thread(target=self.bot.consume_stdout).start()
 		
@@ -78,11 +81,15 @@ class Terminal(Toplevel):
 
 	def close(self):
 		log("closing popup")
-		self.destroy()
-		
-		self.bot.close()
-
-		self.parent.remove_popup(self)
+		try:
+			self.bot.close()
+		except:
+			pass
+		try:
+			self.destroy()
+			self.parent.remove_popup(self)
+		except:
+			pass
 		log("done")
 
 if __name__ == "__main__":

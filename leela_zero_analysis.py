@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
-from gtp import gtp, GtpException
+from gtp import gtp
 import sys
 from gomill import sgf, sgf_moves
 from sys import exit,argv
 from Tkinter import *
-import sys
-import os
-
-import ConfigParser
 
 from time import sleep
 import os
@@ -22,7 +19,6 @@ import tkMessageBox
 
 
 class LeelaZeroAnalysis():
-
 	def run_analysis(self,current_move):
 		one_move=go_to_move(self.move_zero,current_move)
 		player_color=guess_color_to_play(self.move_zero,current_move)
@@ -42,21 +38,16 @@ class LeelaZeroAnalysis():
 		
 		if current_move>1:
 			es=leela_zero.get_leela_zero_final_score()
-			save_position_data(one_move,"ES",es)
+			node_set(one_move,"ES",es)
 			
 		best_answer=answer
-		save_position_data(one_move,"CBM",answer) #Computer Best Move
+		node_set(one_move,"CBM",answer) #Computer Best Move
 
 		position_evaluation=leela_zero.get_all_leela_zero_moves()
 		
 		if (answer.lower() in ["pass","resign"]):
-			if answer.lower()=="pass":
-				leela_zero.undo()
-			elif answer.lower()=="resign":
-				leela_zero.undo_resign()
+			leela_zero.undo()
 		else:
-			#one_move.set("CBM",answer.lower()) #Computer Best Move
-			
 			#let's make sure there is at least one variation available
 			if len(position_evaluation['variations'])==0:
 				position_evaluation['variations'].append({'sequence':answer})
@@ -114,7 +105,7 @@ class LeelaZeroAnalysis():
 
 				i,j=gtp2ij(one_deep_move)
 				new_child=previous_move.new_child()
-				new_child.set_move(current_color,(i,j))
+				node_set(new_child,current_color,(i,j))
 				
 				if first_variation_move==True:
 					first_variation_move=False
@@ -127,15 +118,15 @@ class LeelaZeroAnalysis():
 						else:
 							white_value=variation['value network win rate']
 							black_value=opposite_rate(white_value)	
-						save_variation_data(new_child,"VNWR",black_value+'/'+white_value)
+						node_set(new_child,"VNWR",black_value+'/'+white_value)
 						if best_move:
-							save_position_data(one_move,"VNWR",black_value+'/'+white_value)
+							node_set(one_move,"VNWR",black_value+'/'+white_value)
 
 					if 'policy network value' in variation:
-						save_variation_data(new_child,"PNV",variation['policy network value'])
+						node_set(new_child,"PNV",variation['policy network value'])
 
 					if 'playouts' in variation:
-						save_variation_data(new_child,"PLYO",variation['playouts'])
+						node_set(new_child,"PLYO",variation['playouts'])
 					
 					#new_child.add_comment_text(variation_comment)
 					
@@ -164,14 +155,11 @@ def leela_zero_starting_procedure(sgf_g,profile="slow",silentfail=False):
 	elif profile=="fast":
 		timepermove_entry="FastTimePerMove"
 
-	Config = ConfigParser.ConfigParser()
-	Config.read(config_file)
-
 	leela_zero=bot_starting_procedure("LeelaZero","Leela Zero",Leela_Zero_gtp,sgf_g,profile,silentfail)
 	if not leela_zero:
 		return False
 	try:
-		time_per_move=Config.get("LeelaZero", timepermove_entry)
+		time_per_move=grp_config.get("LeelaZero", timepermove_entry)
 		if time_per_move:
 			time_per_move=int(time_per_move)
 			if time_per_move>0:
@@ -179,18 +167,17 @@ def leela_zero_starting_procedure(sgf_g,profile="slow",silentfail=False):
 				leela_zero.set_time(main_time=0,byo_yomi_time=time_per_move,byo_yomi_stones=1)
 				#self.time_per_move=time_per_move #why is that needed???
 	except:
-		log("Wrong value for Leela thinking time:",Config.get("LeelaZero", timepermove_entry))
+		log("Wrong value for Leela thinking time:",grp_config.get("LeelaZero", timepermove_entry))
 		log("Erasing that value in the config file")
-		Config.set("LeelaZero",timepermove_entry,"")
-		Config.write(open(config_file,"w"))
+		grp_config.set("LeelaZero",timepermove_entry,"")
 	
 	return leela_zero
 
 
 
 class RunAnalysis(LeelaZeroAnalysis,RunAnalysisBase):
-	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile="slow"):
-		RunAnalysisBase.__init__(self,parent,filename,move_range,intervals,variation,komi,profile)
+	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile="slow",existing_variations="remove_everything"):
+		RunAnalysisBase.__init__(self,parent,filename,move_range,intervals,variation,komi,profile,existing_variations)
 
 class LiveAnalysis(LeelaZeroAnalysis,LiveAnalysisBase):
 	def __init__(self,g,filename,profile="slow"):
@@ -213,18 +200,11 @@ class Leela_Zero_gtp(gtp):
 
 	def quick_evaluation(self,color):
 		if color==2:
-			answer=self.play_white()
+			self.play_white()
 		else:
-			answer=self.play_black()
-		
+			self.play_black()
 		position_evaluation=self.get_all_leela_zero_moves()
-		
-		if answer.lower()=="pass":
-			self.undo()
-		elif answer.lower()=="resign":
-			self.undo_resign()
-		else:
-			self.undo()
+		self.undo()
 		
 		if color==1:
 			black_win_rate=position_evaluation["variations"][0]["value network win rate"]
@@ -235,16 +215,14 @@ class Leela_Zero_gtp(gtp):
 		txt=variation_data_formating["VNWR"]%(black_win_rate+'/'+white_win_rate)
 		txt+="\n\n"+variation_data_formating["ES"]%self.get_leela_zero_final_score()
 		return txt
-	def undo_resign(self):
-		#apparently, Leela consider "resign" as a standard move that need to be undoed the same way as other move 
-		#self.undo()
-		pass #apparently, this has been "fixed" in v0.10, v0.11 or v0.12 :)
 		
 	def __init__(self,command):
 		self.c=1
 		self.command_line=command[0]+" "+" ".join(command[1:])
-		leela_zero_working_directory=command[0][:-len(ntpath.basename(command[0]))]
 		
+		leela_zero_working_directory=command[0][:-len(ntpath.basename(command[0]))]
+		command=[c.encode(sys.getfilesystemencoding()) for c in command]
+		leela_zero_working_directory=leela_zero_working_directory.encode(sys.getfilesystemencoding())
 		if leela_zero_working_directory:
 			log("Leela Zero working directory:",leela_zero_working_directory)
 			log(command)
@@ -261,12 +239,12 @@ class Leela_Zero_gtp(gtp):
 		threading.Thread(target=self.consume_stderr).start()
 		
 		log("Checking Leela Zero stderr to check for OpenCL SGEMM tuner running")
-		delay=10
+		delay=60
 		while 1:
 			try:
 				err_line=self.stderr_starting_queue.get(True,delay)
 				
-				delay=1
+				delay=10
 				if "Started OpenCL SGEMM tuner." in err_line:
 					log("OpenCL SGEMM tuner is running")
 					show_info(_("Leela Zero is currently running the OpenCL SGEMM tuner. It may take several minutes until Leela Zero is ready."))
@@ -290,7 +268,8 @@ class Leela_Zero_gtp(gtp):
 				log("Could not find out, abandoning")
 				break
 		
-		
+		self.free_handicap_stones=[]
+		self.history=[]
 
 	def consume_stderr(self):
 		while 1:
@@ -318,7 +297,7 @@ class Leela_Zero_gtp(gtp):
 		try:
 			return answer.split(" ")[1]
 		except:
-			raise GtpException("GtpException in Get_leela_zero_final_score()")
+			raise GRPException("GRPException in Get_leela_zero_final_score()")
 
 	def get_leela_zero_influence(self):
 		self.write("influence")
@@ -385,7 +364,7 @@ from leela_analysis import LeelaSettings
 
 class LeelaZeroSettings(LeelaSettings):
 	def __init__(self,parent):
-		Frame.__init__(self,parent)
+		LeelaSettings.__init__(self,parent)
 		self.name="LeelaZero"
 		self.parent=parent
 		self.gtp=Leela_Zero_gtp
@@ -435,7 +414,7 @@ if __name__ == "__main__":
 		try:
 			parameters=getopt.getopt(argv[1:], '', ['no-gui','range=', 'color=', 'komi=',"variation=", "profil="])
 		except Exception, e:
-			show_error(str(e)+"\n"+usage)
+			show_error(unicode(e)+"\n"+usage)
 			sys.exit()
 		
 		if not parameters[1]:
@@ -447,16 +426,16 @@ if __name__ == "__main__":
 		
 		for filename in parameters[1]:
 			move_selection,intervals,variation,komi,nogui,profil=parse_command_line(filename,parameters[0])
+			filename2=".".join(filename.split(".")[:-1])+".rsgf"
 			if nogui:
-				log("File to analyse:",filename)
-				popup=RunAnalysis("no-gui",filename,move_selection,intervals,variation-1,komi,profil)
+				popup=RunAnalysis("no-gui",[filename,filename2],move_selection,intervals,variation-1,komi,profil)
 				popup.terminate_bot()
 			else:
 				if not app:
 					app = Application()
-				one_analysis=[RunAnalysis,filename,move_selection,intervals,variation-1,komi,profil]
+				one_analysis=[RunAnalysis,[filename,filename2],move_selection,intervals,variation-1,komi,profil]
 				batch.append(one_analysis)
-		
+	
 		if not nogui:
 			app.after(100,lambda: batch_analysis(app,batch))
 			app.mainloop()

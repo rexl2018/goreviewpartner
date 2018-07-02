@@ -1,15 +1,11 @@
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
-from gtp import gtp, GtpException
+from gtp import gtp, GRPException
 import sys
 from gomill import sgf, sgf_moves
 from sys import exit,argv
 from Tkinter import *
-import sys
-import os
-
-import ConfigParser
-
 
 import os
 import threading
@@ -31,7 +27,7 @@ class RayAnalysis():
 		
 		log()
 		log("==============")
-		log("move",str(current_move))
+		log("move",current_move)
 		
 		#additional_comments=""
 		if player_color in ('w',"W"):
@@ -43,8 +39,7 @@ class RayAnalysis():
 
 		if current_move>2:
 			es=ray.final_score()
-			#one_move.set("ES",es)
-			save_position_data(one_move,"ES",es)
+			node_set(one_move,"ES",es)
 			
 		log(len(answer),"sequences")
 
@@ -54,7 +49,7 @@ class RayAnalysis():
 				log("Adding sequence starting from",sequence_first_move)
 				if best_move:
 					best_answer=sequence_first_move
-					save_position_data(one_move,"CBM",best_answer)
+					node_set(one_move,"CBM",best_answer)
 					
 				previous_move=one_move.parent
 				current_color=player_color
@@ -74,7 +69,7 @@ class RayAnalysis():
 					if one_deep_move.lower()!="pass":
 						i,j=gtp2ij(one_deep_move)
 						new_child=previous_move.new_child()
-						new_child.set_move(current_color,(i,j))
+						node_set(new_child,current_color,(i,j))
 						if first_variation_move:
 							first_variation_move=False
 							if win:
@@ -82,12 +77,12 @@ class RayAnalysis():
 									winrate=str(float(win))+'%/'+str(100-float(win))+'%'
 								else:
 									winrate=str(100-float(win))+'%/'+str(win)+'%'
-								save_variation_data(new_child,"BWWR",winrate)
+								node_set(new_child,"BWWR",winrate)
 								if best_move:
-									save_position_data(one_move,"BWWR",winrate)
+									node_set(one_move,"BWWR",winrate)
 							
 							if count:
-								save_variation_data(new_child,"PLYO",count)
+								node_set(new_child,"PLYO",count)
 								
 							if simulation:
 								simulation+="%"
@@ -98,13 +93,13 @@ class RayAnalysis():
 									white_value=simulation
 									black_value=opposite_rate(white_value)
 
-								save_variation_data(new_child,"MCWR",black_value+'/'+white_value)
+								node_set(new_child,"MCWR",black_value+'/'+white_value)
 								if best_move:
-									save_position_data(one_move,"MCWR",black_value+'/'+white_value)
+									node_set(one_move,"MCWR",black_value+'/'+white_value)
 									
 								
 							if policy:
-								save_variation_data(new_child,"PNV",policy+"%")
+								node_set(new_child,"PNV",policy+"%")
 								
 							if value:
 								if player_color=='b':
@@ -113,9 +108,9 @@ class RayAnalysis():
 								else:
 									white_value=value+"%"
 									black_value=opposite_rate(white_value)
-								save_variation_data(new_child,"VNWR",black_value+'/'+white_value)
+								node_set(new_child,"VNWR",black_value+'/'+white_value)
 								if best_move:
-									save_position_data(one_move,"VNWR",black_value+'/'+white_value)
+									node_set(one_move,"VNWR",black_value+'/'+white_value)
 							
 							if best_move:
 								best_move=False
@@ -137,83 +132,18 @@ class RayAnalysis():
 		return ray
 
 def ray_starting_procedure(sgf_g,profile="slow",silentfail=False):
-	return bot_starting_procedure("Ray","Rayon",Ray_gtp,sgf_g,profile,silentfail)
+	return bot_starting_procedure("Ray","RLO",Ray_gtp,sgf_g,profile,silentfail)
 
 
 class RunAnalysis(RayAnalysis,RunAnalysisBase):
-	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile="slow"):
-		RunAnalysisBase.__init__(self,parent,filename,move_range,intervals,variation,komi,profile)
+	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile="slow",existing_variations="remove_everything"):
+		RunAnalysisBase.__init__(self,parent,filename,move_range,intervals,variation,komi,profile,existing_variations)
 
 class LiveAnalysis(RayAnalysis,LiveAnalysisBase):
 	def __init__(self,g,filename,profile="slow"):
 		LiveAnalysisBase.__init__(self,g,filename,profile)
 
 class Ray_gtp(gtp):
-	def __init__(self,command):
-		gtp.__init__(self,command)
-		self.history=[]
-	
-	def place_black(self,move):
-		self.write("play black "+move)
-		answer=self.readline()
-		if answer[0]=="=":
-			self.history.append(["b",move])
-			return True
-		else:return False	
-	
-	def place_white(self,move):
-		self.write("play white "+move)
-		answer=self.readline()
-		if answer[0]=="=":
-			self.history.append(["w",move])
-			return True
-		else:return False
-
-
-	def play_black(self):
-		self.write("genmove black")
-		answer=self.readline().strip()
-		try:
-			move=answer.split(" ")[1]
-			if move.lower()!="resign":
-				self.history.append(["b",move])
-			return move
-		except Exception, e:
-			raise GtpException("GtpException in genmove_black()\nanswer='"+answer+"'\n"+str(e))
-
-		
-	def play_white(self):
-		self.write("genmove white")
-		answer=self.readline().strip()
-		try:
-			move=answer.split(" ")[1]
-			if move.lower()!="resign":
-				self.history.append(["w",move])
-			return move
-		except Exception, e:
-			raise GtpException("GtpException in genmove_white()\nanswer='"+answer+"'\n"+str(e))
-
-
-	def undo(self):
-		self.write("clear_board")
-		answer=self.readline()
-		try:
-			if answer[0]!="=":
-				return False
-			self.history.pop()
-			history=self.history[:]
-			self.history=[]
-			for color,move in history:
-				if color=="b":
-					if not self.place_black(move):
-						return False
-				else:
-					if not self.place_white(move):
-						return False
-			return True			
-		except Exception, e:
-			raise GtpException("GtpException in undo()\n"+str(e))
-	
 	def quick_evaluation(self,color):
 		
 		if color==2:
@@ -262,9 +192,6 @@ class RaySettings(Frame):
 		self.parent=parent
 		log("Initializing Ray setting interface")
 		
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
-		
 		bot="Ray"
 		
 		row=0
@@ -277,12 +204,12 @@ class RaySettings(Frame):
 		row+=1
 		Label(self,text=_("Command")).grid(row=row,column=1,sticky=W)
 		SlowCommand = StringVar() 
-		SlowCommand.set(Config.get(bot,"SlowCommand"))
+		SlowCommand.set(grp_config.get(bot,"SlowCommand"))
 		Entry(self, textvariable=SlowCommand, width=30).grid(row=row,column=2)
 		row+=1
 		Label(self,text=_("Parameters")).grid(row=row,column=1,sticky=W)
 		SlowParameters = StringVar() 
-		SlowParameters.set(Config.get(bot,"SlowParameters"))
+		SlowParameters.set(grp_config.get(bot,"SlowParameters"))
 		Entry(self, textvariable=SlowParameters, width=30).grid(row=row,column=2)
 		row+=1
 		Button(self, text=_("Test"),command=lambda: self.parent.parent.test(Ray_gtp,"slow")).grid(row=row,column=1,sticky=W)
@@ -296,12 +223,12 @@ class RaySettings(Frame):
 		row+=1
 		Label(self,text=_("Command")).grid(row=row,column=1,sticky=W)
 		FastCommand = StringVar() 
-		FastCommand.set(Config.get(bot,"FastCommand"))
+		FastCommand.set(grp_config.get(bot,"FastCommand"))
 		Entry(self, textvariable=FastCommand, width=30).grid(row=row,column=2)
 		row+=1
 		Label(self,text=_("Parameters")).grid(row=row,column=1,sticky=W)
 		FastParameters = StringVar() 
-		FastParameters.set(Config.get(bot,"FastParameters"))
+		FastParameters.set(grp_config.get(bot,"FastParameters"))
 		Entry(self, textvariable=FastParameters, width=30).grid(row=row,column=2)
 		row+=1
 		Button(self, text=_("Test"),command=lambda: self.parent.parent.test(Ray_gtp,"fast")).grid(row=row,column=1,sticky=W)
@@ -317,25 +244,25 @@ class RaySettings(Frame):
 		
 		Label(self,text=_("Static analysis")).grid(row=row,column=1,sticky=W)
 		analysis_bot = StringVar()
-		analysis_bot.set(value[Config.get(bot,"AnalysisBot")])
+		analysis_bot.set(value[grp_config.get(bot,"AnalysisBot")])
 		OptionMenu(self,analysis_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 		
 		row+=1
 		Label(self,text=_("Live analysis")).grid(row=row,column=1,sticky=W)
 		liveanalysis_bot = StringVar()
-		liveanalysis_bot.set(value[Config.get(bot,"LiveAnalysisBot")])
+		liveanalysis_bot.set(value[grp_config.get(bot,"LiveAnalysisBot")])
 		OptionMenu(self,liveanalysis_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 		
 		row+=1
 		Label(self,text=_("Live analysis as black or white")).grid(row=row,column=1,sticky=W)
 		liveplayer_bot = StringVar()
-		liveplayer_bot.set(value[Config.get(bot,"LivePlayerBot")])
+		liveplayer_bot.set(value[grp_config.get(bot,"LivePlayerBot")])
 		OptionMenu(self,liveplayer_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 		
 		row+=1
 		Label(self,text=_("When opening a position for manual play")).grid(row=row,column=1,sticky=W)
 		review_bot = StringVar()
-		review_bot.set(value[Config.get(bot,"ReviewBot")])
+		review_bot.set(value[grp_config.get(bot,"ReviewBot")])
 		OptionMenu(self,review_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 		
 		
@@ -351,25 +278,21 @@ class RaySettings(Frame):
 	
 	def save(self):
 		log("Saving Ray settings")
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
 		
 		bot="Ray"
 		
-		Config.set(bot,"SlowCommand",self.SlowCommand.get())
-		Config.set(bot,"SlowParameters",self.SlowParameters.get())
-		Config.set(bot,"FastCommand",self.FastCommand.get())
-		Config.set(bot,"FastParameters",self.FastParameters.get())
+		grp_config.set(bot,"SlowCommand",self.SlowCommand.get())
+		grp_config.set(bot,"SlowParameters",self.SlowParameters.get())
+		grp_config.set(bot,"FastCommand",self.FastCommand.get())
+		grp_config.set(bot,"FastParameters",self.FastParameters.get())
 		
 		value={_("Slow profile"):"slow",_("Fast profile"):"fast",_("Both profiles"):"both",_("None"):"none"}
 		
-		Config.set(bot,"AnalysisBot",value[self.analysis_bot.get()])
-		Config.set(bot,"LiveanalysisBot",value[self.liveanalysis_bot.get()])
-		Config.set(bot,"LivePlayerBot",value[self.liveplayer_bot.get()])
-		Config.set(bot,"ReviewBot",value[self.review_bot.get()])
+		grp_config.set(bot,"AnalysisBot",value[self.analysis_bot.get()])
+		grp_config.set(bot,"LiveanalysisBot",value[self.liveanalysis_bot.get()])
+		grp_config.set(bot,"LivePlayerBot",value[self.liveplayer_bot.get()])
+		grp_config.set(bot,"ReviewBot",value[self.review_bot.get()])
 		
-		Config.write(open(config_file,"w"))
-
 		if self.parent.parent.refresh!=None:
 			self.parent.parent.refresh()
 
@@ -382,7 +305,7 @@ class RayOpenMove(BotOpenMove):
 
 Ray={}
 Ray['name']="Ray"
-Ray['gtp_name']="Rayon"
+Ray['gtp_name']="RLO"
 Ray['analysis']=RayAnalysis
 Ray['openmove']=RayOpenMove
 Ray['settings']=RaySettings
@@ -416,7 +339,7 @@ if __name__ == "__main__":
 		try:
 			parameters=getopt.getopt(argv[1:], '', ['no-gui','range=', 'color=', 'komi=',"variation=", "profil="])
 		except Exception, e:
-			show_error(str(e)+"\n"+usage)
+			show_error(unicode(e)+"\n"+usage)
 			sys.exit()
 		
 		if not parameters[1]:
@@ -428,16 +351,16 @@ if __name__ == "__main__":
 		
 		for filename in parameters[1]:
 			move_selection,intervals,variation,komi,nogui,profil=parse_command_line(filename,parameters[0])
+			filename2=".".join(filename.split(".")[:-1])+".rsgf"
 			if nogui:
-				log("File to analyse:",filename)
-				popup=RunAnalysis("no-gui",filename,move_selection,intervals,variation-1,komi,profil)
+				popup=RunAnalysis("no-gui",[filename,filename2],move_selection,intervals,variation-1,komi,profil)
 				popup.terminate_bot()
 			else:
 				if not app:
 					app = Application()
-				one_analysis=[RunAnalysis,filename,move_selection,intervals,variation-1,komi,profil]
+				one_analysis=[RunAnalysis,[filename,filename2],move_selection,intervals,variation-1,komi,profil]
 				batch.append(one_analysis)
-		
+	
 		if not nogui:
 			app.after(100,lambda: batch_analysis(app,batch))
 			app.mainloop()

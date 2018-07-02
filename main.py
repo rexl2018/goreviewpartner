@@ -1,4 +1,5 @@
-# -*- coding:Utf-8 -*-
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
 import sys, os
 print "STDIN encoding:",sys.stdin.encoding
@@ -10,7 +11,7 @@ try:
 	from Tkinter import * 
 except Exception, e:
 	print "Could not import the Tkinter librairy, please double check it is installed:"
-	print str(e)
+	print unicode(e)
 	raw_input()
 	sys.exit()
 
@@ -32,7 +33,7 @@ class Main(Toplevel):
 
 		self.popups=[]
 
-		self.control_frame = Frame(self);
+		self.control_frame = Frame(self)
 		
 		label = Label(self.control_frame, text=_("This is GoReviewPartner"), font="-weight bold")
 		label.pack(padx=5, pady=5)
@@ -71,7 +72,7 @@ class Main(Toplevel):
 		if not filename:
 			return
 		rsgf2sgf(filename)
-		show_info(_("The file %s as been converted to %s").decode("utf")%(os.path.basename(filename),os.path.basename(filename)+".sgf"),parent=self.parent)
+		show_info(_("The file %s has been converted to %s")%(os.path.basename(filename),os.path.basename(filename)+".sgf"),parent=self.parent)
 	def close(self):
 		for popup in self.popups[:]:
 			popup.close()
@@ -81,10 +82,9 @@ class Main(Toplevel):
 
 	def launch_analysis(self):
 		filename = open_sgf_file(parent=self)
-		log(filename)
-		log("gamename:",filename[:-4])
 		if not filename:
 			return
+		
 		log("filename:",filename)
 		
 		new_popup=RangeSelector(self.parent,filename,bots=get_available("AnalysisBot"))
@@ -101,19 +101,10 @@ class Main(Toplevel):
 
 	def launch_review(self):
 		filename = open_rsgf_file(parent=self.parent)
-		log(filename)
 		if not filename:
 			return
-
-		display_factor=.5
 		
-		screen_width = self.parent.winfo_screenwidth()
-		screen_height = self.parent.winfo_screenheight()
-		
-		width=int(display_factor*screen_width)
-		height=int(display_factor*screen_height)
-		
-		new_popup=dual_view.DualView(self.parent,filename,min(width,height))
+		new_popup=dual_view.DualView(self.parent,filename)
 		
 		self.parent.add_popup(new_popup)
 
@@ -123,8 +114,6 @@ class Main(Toplevel):
 
 	def refresh(self):
 		log("refreshing")
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
 		if len(get_available("AnalysisBot"))==0:
 			self.analysis_bouton.config(state='disabled')
 			self.download_bouton.config(state='disabled')

@@ -1,7 +1,10 @@
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
 from functools import partial
 from copy import deepcopy as copy
 
-space=10
+#space=10
 
 fuzzy=0.0
 
@@ -101,17 +104,22 @@ class Stone():
 	def ij2xy(self,i,j):
 		space=self.space
 		dim=self.dim
-		y=(0.5+dim-i)*space+self.anchor_y
-		x=(0.5+1.+j)*space+self.anchor_x
+		y=(0.5+0.5+dim-i)*space+self.anchor_y
+		x=(0.5+0.5+1.+j)*space+self.anchor_x
 		return x,y
 
 
 class Goban(Canvas):
-	def __init__(self,dim,**kwargs):
+	def __init__(self,dim,size,**kwargs):
+		self.space=size/(dim+1+1+1)
 		self.dim=dim
 		self.space=space
 		#self.wood_color=(214,174,114) #same as gogui
 		self.wood_color=(255,255,255)
+		if "width" not in kwargs:
+			kwargs["width"]=size
+		if "height" not in kwargs:
+			kwargs["height"]=size
 		Canvas.__init__(self,**kwargs)
 		
 		self.anchor_x=0
@@ -173,6 +181,9 @@ class Goban(Canvas):
 	
 	def create_goban(self):
 		space=self.space
+		if space<4:
+			return
+		
 		dim=self.dim
 		r,g,b=self.wood_color
 		bg='#%02x%02x%02x' % (r, g, b)
@@ -235,8 +246,8 @@ class Goban(Canvas):
 	def ij2xy(self,i,j):
 		space=self.space
 		dim=self.dim
-		y=(0.5+dim-i)*space+self.anchor_y
-		x=(0.5+1.+j)*space+self.anchor_x
+		y=(0.5+0.5+dim-i)*space+self.anchor_y
+		x=(0.5+0.5+1.+j)*space+self.anchor_x
 		return x,y
 
 	def xy2ij(self,x,y):
@@ -246,7 +257,7 @@ class Goban(Canvas):
 		x-=self.anchor_x
 		y-=self.anchor_y
 
-		return int(round(0.5+dim-1.*y/space)),int(round(1.*x/space-0.5)-1)
+		return int(round(0.5+0.5+dim-1.*y/space)),int(round(1.*x/space-0.5-0.5)-1)
 
 	def draw_point(self,i,j,diameter,color="black",outline="black",width=1):
 		space=self.space
@@ -276,6 +287,10 @@ class Goban(Canvas):
 		self.grid=grid
 		self.markup=markup
 		space=self.space
+		
+		if space<4:
+			return
+		
 		dim=self.dim
 		for item in self.temporary_shapes:
 			self.delete(item)
@@ -303,7 +318,8 @@ class Goban(Canvas):
 		r,g,b=self.wood_color
 		bg='#%02x%02x%02x' % (r, g, b)
 		
-		self.config(width=space*(1+dim+1), height=space*(1+dim+1))
+		if int(self.cget("width"))==10:
+			self.config(width=space*(dim+1+1+1), height=space*(dim+1+1+1))
 
 		for i in range(dim):
 			for j in range(dim):

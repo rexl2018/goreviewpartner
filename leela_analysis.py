@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
-from gtp import gtp, GtpException
+from gtp import gtp
 import sys
 from gomill import sgf, sgf_moves
 from sys import exit,argv
 from Tkinter import *
-import sys
-import os
-
-import ConfigParser
 
 from time import sleep
 import os
@@ -31,7 +28,6 @@ class LeelaAnalysis():
 		log()
 		log("==============")
 		log("move",str(current_move))
-		
 		#additional_comments=""
 		if player_color in ('w',"W"):
 			log("leela play white")
@@ -42,20 +38,16 @@ class LeelaAnalysis():
 		
 		
 		best_answer=answer
-		save_position_data(one_move,"CBM",answer) #Computer Best Move
+		node_set(one_move,"CBM",answer) #Computer Best Move
 		
 		#all_moves=leela.get_all_leela_moves()
 		position_evaluation=leela.get_all_leela_moves()
 
 		if "estimated score" in position_evaluation:
-			#one_move.set("ES",position_evaluation["estimated score"])
-			save_position_data(one_move,"ES",position_evaluation["estimated score"])
+			node_set(one_move,"ES",position_evaluation["estimated score"])
 		if (answer.lower() in ["pass","resign"]):
 			bookmove=False
-			if answer.lower()=="pass":
-				leela.undo()
-			elif answer.lower()=="resign":
-				leela.undo_resign()
+			leela.undo()
 			nb_undos=0
 		else:
 			nb_undos=1 #let's remember to undo that move from Leela
@@ -123,7 +115,7 @@ class LeelaAnalysis():
 
 				i,j=gtp2ij(one_deep_move)
 				new_child=previous_move.new_child()
-				new_child.set_move(current_color,(i,j))
+				node_set(new_child,current_color,(i,j))
 				
 				if first_variation_move==True:
 					first_variation_move=False
@@ -136,9 +128,9 @@ class LeelaAnalysis():
 						else:
 							white_value=variation['win rate']
 							black_value=opposite_rate(white_value)
-						save_variation_data(new_child,"BWWR",black_value+'/'+white_value)
+						node_set(new_child,"BWWR",black_value+'/'+white_value)
 						if best_move:
-							save_position_data(one_move,"BWWR",black_value+'/'+white_value)
+							node_set(one_move,"BWWR",black_value+'/'+white_value)
 					
 					if 'monte carlo win rate' in variation:
 						if player_color=='b':
@@ -147,9 +139,9 @@ class LeelaAnalysis():
 						else:
 							white_value=variation['monte carlo win rate']
 							black_value=opposite_rate(white_value)
-						save_variation_data(new_child,"MCWR",black_value+'/'+white_value)
+						node_set(new_child,"MCWR",black_value+'/'+white_value)
 						if best_move:
-							save_position_data(one_move,"MCWR",black_value+'/'+white_value)
+							node_set(one_move,"MCWR",black_value+'/'+white_value)
 					
 					if 'value network win rate' in variation:
 						if player_color=='b':
@@ -158,25 +150,25 @@ class LeelaAnalysis():
 						else:
 							white_value=variation['value network win rate']
 							black_value=opposite_rate(white_value)
-						save_variation_data(new_child,"VNWR",black_value+'/'+white_value)
+						node_set(new_child,"VNWR",black_value+'/'+white_value)
 						if best_move:
-							save_position_data(one_move,"VNWR",black_value+'/'+white_value)
+							node_set(one_move,"VNWR",black_value+'/'+white_value)
 					
 					if 'move evaluation' in variation:
-						save_variation_data(new_child,"EVAL",variation['move evaluation'])
+						node_set(new_child,"EVAL",variation['move evaluation'])
 						
 					if 'rapid action value estimation' in variation:
-						save_variation_data(new_child,"RAVE",variation['rapid action value estimation'])
+						node_set(new_child,"RAVE",variation['rapid action value estimation'])
 						
 					if 'policy network value' in variation:
-						save_variation_data(new_child,"PNV",variation['policy network value'])
+						node_set(new_child,"PNV",variation['policy network value'])
 					
 					if 'playouts' in variation:
-						save_variation_data(new_child,"PLYO",variation['playouts'])
+						node_set(new_child,"PLYO",variation['playouts'])
 						
 					if bookmove:
 						bookmove=False
-						save_variation_data(new_child,"BKMV","yes")
+						node_set(new_child,"BKMV","yes")
 					
 					if best_move:
 						best_move=False
@@ -201,11 +193,10 @@ class LeelaAnalysis():
 					white_influence_points.append([i,j])
 
 		if black_influence_points!=[]:
-			one_move.parent.set("TB",black_influence_points)
-		
+			node_set(one_move.parent,"TB",black_influence_points)
 		if white_influence_points!=[]:
-			one_move.parent.set("TW",white_influence_points)	
-		
+			node_set(one_move.parent,"TW",white_influence_points)
+			
 		for u in range(nb_undos):
 			leela.undo()
 
@@ -223,15 +214,12 @@ def leela_starting_procedure(sgf_g,profile="slow",silentfail=False):
 	elif profile=="fast":
 		timepermove_entry="FastTimePerMove"
 
-	Config = ConfigParser.ConfigParser()
-	Config.read(config_file)
-
 	leela=bot_starting_procedure("Leela","Leela",Leela_gtp,sgf_g,profile,silentfail)
 	if not leela:
 		return False
 
 	try:
-		time_per_move=Config.get("Leela", timepermove_entry)
+		time_per_move=grp_config.get("Leela", timepermove_entry)
 		if time_per_move:
 			time_per_move=int(time_per_move)
 			if time_per_move>0:
@@ -239,16 +227,15 @@ def leela_starting_procedure(sgf_g,profile="slow",silentfail=False):
 				leela.set_time(main_time=0,byo_yomi_time=time_per_move,byo_yomi_stones=1)
 				#self.time_per_move=time_per_move #why is that needed???
 	except:
-		log("Wrong value for Leela thinking time:",Config.get("Leela", timepermove_entry))
+		log("Wrong value for Leela thinking time:",grp_config.get("Leela", timepermove_entry))
 		log("Erasing that value in the config file")
-		Config.set("Leela",timepermove_entry,"")
-		Config.write(open(config_file,"w"))
+		grp_config.set("Leela",timepermove_entry,"")
 	
 	return leela
 
 class RunAnalysis(LeelaAnalysis,RunAnalysisBase):
-	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile="slow"):
-		RunAnalysisBase.__init__(self,parent,filename,move_range,intervals,variation,komi,profile)
+	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile="slow",existing_variations="remove_everything"):
+		RunAnalysisBase.__init__(self,parent,filename,move_range,intervals,variation,komi,profile,existing_variations)
 
 class LiveAnalysis(LeelaAnalysis,LiveAnalysisBase):
 	def __init__(self,g,filename,profile="slow"):
@@ -262,7 +249,7 @@ class Variation(dict):
 	pass
 
 class Leela_gtp(gtp):
-	
+
 	def showboard(self):
 		self.write("showboard")
 		self.readline() #empty line
@@ -278,18 +265,12 @@ class Leela_gtp(gtp):
 		
 	def quick_evaluation(self,color):
 		if color==2:
-			answer=self.play_white()
+			self.play_white()
 		else:
-			answer=self.play_black()
-		
+			self.play_black()
 		position_evaluation=self.get_all_leela_moves()
-
-		if answer.lower()=="pass":
-			self.undo()
-		elif answer.lower()=="resign":
-			self.undo_resign()
-		else:
-			self.undo()
+		self.undo()
+		
 		txt=""
 		try:
 			if color==1:
@@ -304,17 +285,14 @@ class Leela_gtp(gtp):
 			txt+=variation_data_formating["ES"]%self.get_leela_final_score()
 
 		return txt
-	def undo_resign(self):
-		#apparently, Leela consider "resign" as a standard move that need to be undoed the same way as other move 
-		self.undo()
-		
+	
 	def get_leela_final_score(self):
 		self.write("final_score")
 		answer=self.readline().strip()
 		try:
 			return answer.split(" ")[1]
 		except:
-			raise GtpException("GtpException in Get_leela_final_score()")
+			raise GRPException("GRPException in Get_leela_final_score()")
 
 	def get_leela_influence(self):
 		self.write("influence")
@@ -346,12 +324,10 @@ class Leela_gtp(gtp):
 				buff.append(self.stderr_queue.get())
 			sleep(.01)
 		
-		buff.reverse()
-		
 		position_evaluation=Position()
 		
 		for err_line in buff:
-			#log(err_line)
+			#log(err_line[:-1])
 			
 			if "score=" in err_line:
 				position_evaluation["estimated score"]=err_line.split("score=")[1].strip()
@@ -362,7 +338,7 @@ class Leela_gtp(gtp):
 			
 			if " ->" in err_line:
 				variation=Variation()
-				#log(err_line)
+				#log(err_line[:-1])
 				one_answer=err_line.strip().split(" ")[0]
 				variation["first move"]=one_answer
 				one_score=err_line.split()[4][:-1]
@@ -391,8 +367,7 @@ class Leela_gtp(gtp):
 					variation["win rate"]=one_score
 					sequence=err_line.split("PV: ")[1].strip()
 					variation["sequence"]=sequence
-					position_evaluation['variations']=[variation]+position_evaluation['variations']
-		
+					position_evaluation['variations'].append(variation)
 		return position_evaluation
 
 
@@ -408,9 +383,7 @@ class LeelaSettings(Frame):
 	def initialize(self):
 		bot=self.name
 		log("Initializing "+bot+" setting interface")
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
-		
+
 		bot=self.name
 		
 		row=0
@@ -423,17 +396,17 @@ class LeelaSettings(Frame):
 		row+=1
 		Label(self,text=_("Command")).grid(row=row,column=1,sticky=W)
 		SlowCommand = StringVar() 
-		SlowCommand.set(Config.get(bot,"SlowCommand"))
+		SlowCommand.set(grp_config.get(bot,"SlowCommand"))
 		Entry(self, textvariable=SlowCommand, width=30).grid(row=row,column=2)
 		row+=1
 		Label(self,text=_("Parameters")).grid(row=row,column=1,sticky=W)
 		SlowParameters = StringVar()
-		SlowParameters.set(Config.get(bot,"SlowParameters"))
+		SlowParameters.set(grp_config.get(bot,"SlowParameters"))
 		Entry(self, textvariable=SlowParameters, width=30).grid(row=row,column=2)
 		row+=1
 		Label(self,text=_("Time per move (s)")).grid(row=row,column=1,sticky=W)
 		SlowTimePerMove = StringVar()
-		SlowTimePerMove.set(Config.get(bot,"SlowTimePerMove"))
+		SlowTimePerMove.set(grp_config.get(bot,"SlowTimePerMove"))
 		Entry(self, textvariable=SlowTimePerMove, width=30).grid(row=row,column=2)
 		row+=1
 		Button(self, text=_("Test"),command=lambda: self.parent.parent.test(self.gtp,"slow")).grid(row=row,column=1,sticky=W)
@@ -448,18 +421,18 @@ class LeelaSettings(Frame):
 		row+=1
 		Label(self,text=_("Command")).grid(row=row,column=1,sticky=W)
 		FastCommand = StringVar()
-		FastCommand.set(Config.get(bot,"FastCommand"))
+		FastCommand.set(grp_config.get(bot,"FastCommand"))
 		Entry(self, textvariable=FastCommand, width=30).grid(row=row,column=2)
 		row+=1
 		Label(self,text=_("Parameters")).grid(row=row,column=1,sticky=W)
 		FastParameters = StringVar() 
-		FastParameters.set(Config.get(bot,"FastParameters"))
+		FastParameters.set(grp_config.get(bot,"FastParameters"))
 		Entry(self, textvariable=FastParameters, width=30).grid(row=row,column=2)
 		
 		row+=1
 		Label(self,text=_("Time per move (s)")).grid(row=row,column=1,sticky=W)
 		FastTimePerMove = StringVar() 
-		FastTimePerMove.set(Config.get(bot,"FastTimePerMove"))
+		FastTimePerMove.set(grp_config.get(bot,"FastTimePerMove"))
 		Entry(self, textvariable=FastTimePerMove, width=30).grid(row=row,column=2)
 		row+=1
 		Button(self, text=_("Test"),command=lambda: self.parent.parent.test(self.gtp,"fast")).grid(row=row,column=1,sticky=W)
@@ -475,25 +448,25 @@ class LeelaSettings(Frame):
 
 		Label(self,text=_("Static analysis")).grid(row=row,column=1,sticky=W)
 		analysis_bot = StringVar()
-		analysis_bot.set(value[Config.get(bot,"AnalysisBot")])
+		analysis_bot.set(value[grp_config.get(bot,"AnalysisBot")])
 		OptionMenu(self,analysis_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 		
 		row+=1
 		Label(self,text=_("Live analysis")).grid(row=row,column=1,sticky=W)
 		liveanalysis_bot = StringVar()
-		liveanalysis_bot.set(value[Config.get(bot,"LiveAnalysisBot")])
+		liveanalysis_bot.set(value[grp_config.get(bot,"LiveAnalysisBot")])
 		OptionMenu(self,liveanalysis_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 		
 		row+=1
 		Label(self,text=_("Live analysis as black or white")).grid(row=row,column=1,sticky=W)
 		liveplayer_bot = StringVar()
-		liveplayer_bot.set(value[Config.get(bot,"LivePlayerBot")])
+		liveplayer_bot.set(value[grp_config.get(bot,"LivePlayerBot")])
 		OptionMenu(self,liveplayer_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 		
 		row+=1
 		Label(self,text=_("When opening a position for manual play")).grid(row=row,column=1,sticky=W)
 		review_bot = StringVar()
-		review_bot.set(value[Config.get(bot,"ReviewBot")])
+		review_bot.set(value[grp_config.get(bot,"ReviewBot")])
 		OptionMenu(self,review_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
 		
 
@@ -512,25 +485,20 @@ class LeelaSettings(Frame):
 	def save(self):
 		bot=self.name
 		log("Saving "+bot+" settings")
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
 		
-		Config.set(bot,"SlowCommand",self.SlowCommand.get())
-		Config.set(bot,"SlowParameters",self.SlowParameters.get())
-		Config.set(bot,"SlowTimePerMove",self.SlowTimePerMove.get())
-		Config.set(bot,"FastCommand",self.FastCommand.get())
-		Config.set(bot,"FastParameters",self.FastParameters.get())
-		Config.set(bot,"FastTimePerMove",self.FastTimePerMove.get())
+		grp_config.set(bot,"SlowCommand",self.SlowCommand.get())
+		grp_config.set(bot,"SlowParameters",self.SlowParameters.get())
+		grp_config.set(bot,"SlowTimePerMove",self.SlowTimePerMove.get())
+		grp_config.set(bot,"FastCommand",self.FastCommand.get())
+		grp_config.set(bot,"FastParameters",self.FastParameters.get())
+		grp_config.set(bot,"FastTimePerMove",self.FastTimePerMove.get())
 
 		value={_("Slow profile"):"slow",_("Fast profile"):"fast",_("Both profiles"):"both",_("None"):"none"}
 		
-		Config.set(bot,"AnalysisBot",value[self.analysis_bot.get()])
-		Config.set(bot,"LiveanalysisBot",value[self.liveanalysis_bot.get()])
-		Config.set(bot,"LivePlayerBot",value[self.liveplayer_bot.get()])
-		Config.set(bot,"ReviewBot",value[self.review_bot.get()])
-		
-
-		Config.write(open(config_file,"w"))
+		grp_config.set(bot,"AnalysisBot",value[self.analysis_bot.get()])
+		grp_config.set(bot,"LiveanalysisBot",value[self.liveanalysis_bot.get()])
+		grp_config.set(bot,"LivePlayerBot",value[self.liveplayer_bot.get()])
+		grp_config.set(bot,"ReviewBot",value[self.review_bot.get()])
 
 		if self.parent.parent.refresh!=None:
 			self.parent.parent.refresh()
@@ -578,7 +546,7 @@ if __name__ == "__main__":
 		try:
 			parameters=getopt.getopt(argv[1:], '', ['no-gui','range=', 'color=', 'komi=',"variation=", "profil="])
 		except Exception, e:
-			show_error(str(e)+"\n"+usage)
+			show_error(unicode(e)+"\n"+usage)
 			sys.exit()
 		
 		if not parameters[1]:
@@ -590,16 +558,16 @@ if __name__ == "__main__":
 		
 		for filename in parameters[1]:
 			move_selection,intervals,variation,komi,nogui,profil=parse_command_line(filename,parameters[0])
+			filename2=".".join(filename.split(".")[:-1])+".rsgf"
 			if nogui:
-				log("File to analyse:",filename)
-				popup=RunAnalysis("no-gui",filename,move_selection,intervals,variation-1,komi,profil)
+				popup=RunAnalysis("no-gui",[filename,filename2],move_selection,intervals,variation-1,komi,profil)
 				popup.terminate_bot()
 			else:
 				if not app:
 					app = Application()
-				one_analysis=[RunAnalysis,filename,move_selection,intervals,variation-1,komi,profil]
+				one_analysis=[RunAnalysis,[filename,filename2],move_selection,intervals,variation-1,komi,profil]
 				batch.append(one_analysis)
-		
+	
 		if not nogui:
 			app.after(100,lambda: batch_analysis(app,batch))
 			app.mainloop()

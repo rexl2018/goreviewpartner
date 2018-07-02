@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
 from toolbox import *
 from toolbox import _
@@ -21,9 +22,6 @@ class LiveAnalysisLauncher(Toplevel):
 		
 		root = self
 		root.parent.title('GoReviewPartner')
-		
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
 
 		row=1
 		value={"slow":" (%s)"%_("Slow profile"),"fast":" (%s)"%_("Fast profile")}
@@ -42,7 +40,7 @@ class LiveAnalysisLauncher(Toplevel):
 		self.black_selection=StringVar()	
 		self.black_selection_wrapper=Frame(self)
 		self.black_selection_wrapper.grid(row=row,column=2,sticky=W)
-		self.black_options=[_("Human"),_("Bot used for analysis")]+self.bots_names
+		self.black_options=[_("Human player"),_("Bot used for analysis")]+self.bots_names
 		self.black_menu=apply(OptionMenu,(self.black_selection_wrapper,self.black_selection)+tuple(self.black_options))
 		self.black_menu.pack()
 
@@ -55,7 +53,7 @@ class LiveAnalysisLauncher(Toplevel):
 		self.white_selection=StringVar()
 		self.white_selection_wrapper=Frame(self)
 		self.white_selection_wrapper.grid(row=row,column=2,sticky=W)
-		self.white_options=[_("Human"),_("Bot used for analysis")]+self.bots_names
+		self.white_options=[_("Human player"),_("Bot used for analysis")]+self.bots_names
 		self.white_menu=apply(OptionMenu,(self.white_selection_wrapper,self.white_selection)+tuple(self.white_options))
 		self.white_menu.pack()
 		
@@ -64,12 +62,7 @@ class LiveAnalysisLauncher(Toplevel):
 		self.overlap_thinking_wrapper.grid(row=row,column=1,columnspan=2,sticky=W)
 		self.overlap_thinking_widgets=[]
 		
-		nooverlap=True
-		try:
-			nooverlap=Config.get("Live","NoOverlap")
-		except:
-			pass
-		self.no_overlap_thinking = BooleanVar(value=nooverlap)
+		self.no_overlap_thinking = BooleanVar(value=grp_config.getboolean("Live","NoOverlap"))
 		
 		row+=1
 		Label(self,text="").grid(row=row,column=1)
@@ -79,12 +72,7 @@ class LiveAnalysisLauncher(Toplevel):
 		self.dim=Entry(self)
 		self.dim.grid(row=row,column=2,sticky=W)
 		self.dim.delete(0, END)
-		size="19"
-		try:
-			size=Config.get("Live", "size")
-		except:
-			Config.set("Live", size)
-		self.dim.insert(0, size)
+		self.dim.insert(0, grp_config.get("Live", "size"))
 
 		row+=1
 		Label(self,text="").grid(row=row,column=1)
@@ -94,12 +82,7 @@ class LiveAnalysisLauncher(Toplevel):
 		self.komi=Entry(self)
 		self.komi.grid(row=row,column=2,sticky=W)
 		self.komi.delete(0, END)
-		komi="7.5"
-		try:
-			komi=Config.get("Live", "komi")
-		except:
-			Config.set("Live", komi)
-		self.komi.insert(0, komi)	
+		self.komi.insert(0, grp_config.get("Live", "komi"))
 
 		row+=1
 		Label(self,text="").grid(row=row,column=1)
@@ -109,13 +92,8 @@ class LiveAnalysisLauncher(Toplevel):
 		self.handicap=Entry(self)
 		self.handicap.grid(row=row,column=2,sticky=W)
 		self.handicap.delete(0, END)
-		handicap="0"
-		try:
-			handicap=Config.get("Live", "handicap")
-		except:
-			Config.set("Live", handicap)
-		self.handicap.insert(0, handicap)
-
+		self.handicap.insert(0, grp_config.get("Live", "handicap"))
+		
 		row+=1
 		Label(self,text="").grid(row=row,column=1)
 
@@ -124,7 +102,7 @@ class LiveAnalysisLauncher(Toplevel):
 		self.filename=Entry(self)
 		self.filename.grid(row=row,column=2,sticky=W)
 		self.filename.delete(0, END)
-		filename=datetime.now().strftime('%Y-%m-%d_%H-%M_'+_('Human')+'_vs_'+_('Human')+'.sgf')
+		filename=datetime.now().strftime('%Y-%m-%d_%H-%M_')+_('Human')+'_vs_'+_('Human')+'.sgf'
 		self.filename.insert(0, filename)
 		self.filename.bind("<Button-1>",self.change_filename)
 		row+=1
@@ -154,20 +132,20 @@ class LiveAnalysisLauncher(Toplevel):
 		Button(self,text=_("Start"),command=self.start).grid(row=row,column=2,sticky=E)
 
 		self.bot_selection.set(self.analysis_bots_names[0])
-		self.black_selection.set(_("Human"))
-		self.white_selection.set(_("Human"))
+		self.black_selection.set(_("Human player"))
+		self.white_selection.set(_("Human player"))
 		
-		analyser=Config.get("Live","Analyser")
+		analyser=grp_config.get("Live","Analyser")
 		if analyser in self.analysis_bots_names:
 			self.bot_selection.set(analyser)
 		
 		self.change_parameters()
 		
-		black=Config.get("Live","black")
+		black=grp_config.get("Live","black")
 		if black in self.black_options:
 			self.black_selection.set(black)
 			
-		white=Config.get("Live","white")
+		white=grp_config.get("Live","white")
 		if white in self.white_options:
 			self.white_selection.set(white)
 		
@@ -187,8 +165,6 @@ class LiveAnalysisLauncher(Toplevel):
 		self.parent.remove_popup(self)
 		
 	def start(self):
-		#bots={bot['name']:bot for bot in bots_for_analysis}
-		#analyser=bots[self.bot_selection.get()]
 		value={"slow":" (%s)"%_("Slow profile"),"fast":" (%s)"%_("Fast profile")}
 		bots={bot['name']+value[bot['profile']]:bot for bot in get_available("LiveAnalysisBot")}
 		analyser=bots[self.bot_selection.get()]
@@ -201,9 +177,6 @@ class LiveAnalysisLauncher(Toplevel):
 		elif b==1:
 			black="analyser"
 		else:
-			print "=========="
-			print bots.keys()
-			print "=========="
 			black=bots[self.black_selection.get()]
 		
 		w=self.selected_white_index()
@@ -216,24 +189,19 @@ class LiveAnalysisLauncher(Toplevel):
 		else:
 			white=bots[self.white_selection.get()]
 		
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
-		
 		komi=float(self.komi.get())
 		dim=int(self.dim.get())
 		handicap=int(self.handicap.get())
 		
-		Config.set("Live","komi",komi)
-		Config.set("Live","size",dim)
-		Config.set("Live","handicap",handicap)
+		grp_config.set("Live","komi",komi)
+		grp_config.set("Live","size",dim)
+		grp_config.set("Live","handicap",handicap)
 		
-		Config.set("Live","analyser",self.bot_selection.get().encode("utf"))
-		Config.set("Live","black",self.black_selection.get().encode("utf"))
-		Config.set("Live","white",self.white_selection.get().encode("utf"))
+		grp_config.set("Live","analyser",self.bot_selection.get())
+		grp_config.set("Live","black",self.black_selection.get())
+		grp_config.set("Live","white",self.white_selection.get())
 		
-		Config.write(open(config_file,"w"))
-		 
-		filename=os.path.join(Config.get("General","livefolder"),self.filename.get())
+		filename=os.path.join(grp_config.get("General","livefolder"),self.filename.get())
 		self.withdraw()
 		popup=LiveAnalysis(self.parent,analyser,black,white,dim=dim,komi=komi,handicap=handicap,filename=filename,overlap_thinking=not self.no_overlap_thinking.get(),color=self.color.get())
 		self.parent.add_popup(popup)
@@ -242,27 +210,27 @@ class LiveAnalysisLauncher(Toplevel):
 	def selected_black_index(self):
 		i=0
 		for bo in self.black_options:
-			if bo.decode("utf")==self.black_selection.get():
+			if bo==self.black_selection.get():
 				return i
 			i+=1
 
 	def selected_white_index(self):
 		i=0
 		for wo in self.white_options:
-			if wo.decode("utf")==self.white_selection.get():
+			if wo==self.white_selection.get():
 				return i
 			i+=1
 
 	def update_black_white_options(self):
 		i=self.selected_black_index()
-		self.black_options=[_("Human"),_("Bot used for analysis")+": "+self.bot_selection.get()]+self.bots_names
+		self.black_options=[_("Human player"),_("Bot used for analysis")+": "+self.bot_selection.get()]+self.bots_names
 		self.black_menu.pack_forget()
 		self.black_menu=apply(OptionMenu,(self.black_selection_wrapper,self.black_selection)+tuple(self.black_options))
 		self.black_menu.pack()
 		self.black_selection.set(self.black_options[i])
 
 		j=self.selected_white_index()
-		self.white_options=[_("Human"),_("Bot used for analysis")+": "+self.bot_selection.get()]+self.bots_names
+		self.white_options=[_("Human player"),_("Bot used for analysis")+": "+self.bot_selection.get()]+self.bots_names
 		self.white_menu.pack_forget()
 		self.white_menu=apply(OptionMenu,(self.white_selection_wrapper,self.white_selection)+tuple(self.white_options))
 		self.white_menu.pack()
@@ -279,7 +247,7 @@ class LiveAnalysisLauncher(Toplevel):
 			white=self.white_selection.get()
 			
 		self.filename.delete(0, END)
-		filename=datetime.now().strftime('%Y-%m-%d_%H-%M_'+black+'_vs_'+white+'.sgf')
+		filename=datetime.now().strftime('%Y-%m-%d_%H-%M_')+black+'_vs_'+white+'.sgf'
 		self.filename.insert(0, filename)
 
 	def change_parameters(self):
@@ -300,7 +268,7 @@ class LiveAnalysisLauncher(Toplevel):
 			nb_bots=3
 		
 		for widget in self.overlap_thinking_widgets:
-				widget.grid_forget()
+			widget.grid_forget()
 		self.overlap_thinking_widgets=[]
 		
 		if nb_bots>1:
@@ -326,6 +294,7 @@ class LiveAnalysis(Toplevel):
 		self.komi=komi
 		self.handicap=handicap
 		self.filename=filename
+		self.rsgf_filename=".".join(filename.split(".")[:-1])+".rsgf"
 		self.overlap_thinking=overlap_thinking
 		self.color=color
 		
@@ -345,23 +314,8 @@ class LiveAnalysis(Toplevel):
 	def open_move(self):
 		from dual_view import OpenMove
 		log("Opening move",self.current_move)
-		
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
-		
-		display_factor=.5
-		try:
-			display_factor=float(Config.get("Review", "GobanScreenRatio"))
-		except:
-			Config.set("Review", "GobanScreenRatio",display_factor)
-			Config.write(open(config_file,"w"))
-		screen_width = self.parent.winfo_screenwidth()
-		screen_height = self.parent.winfo_screenheight()
-		width=int(display_factor*screen_width)
-		height=int(display_factor*screen_height)
-		goban_size=min(width,height)
-		
-		new_popup=OpenMove(self.parent,self.current_move,self.dim,self.g,goban_size)
+
+		new_popup=OpenMove(self.parent,self.current_move,self.dim,self.g)
 		new_popup.goban.mesh=self.goban.mesh
 		new_popup.goban.wood=self.goban.wood
 		new_popup.goban.black_stones=self.goban.black_stones
@@ -372,9 +326,6 @@ class LiveAnalysis(Toplevel):
 		self.parent.add_popup(new_popup)
 
 	def initialize(self):
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
-		
 		popup=self
 		buttons_with_status=[]
 		dim=self.dim
@@ -386,23 +337,15 @@ class LiveAnalysis(Toplevel):
 		
 		panel.grid(column=1,row=1,sticky=N+S)
 		
-		display_factor=.5
-		try:
-			display_factor=float(Config.get("Review", "GobanScreenRatio"))
-		except:
-			Config.set("Review", "GobanScreenRatio",display_factor)
-			Config.write(open(config_file,"w"))
-		
+		display_factor=grp_config.getfloat("Live", "LiveGobanRatio")
 		screen_width = self.parent.winfo_screenwidth()
 		screen_height = self.parent.winfo_screenheight()
-		
 		width=int(display_factor*screen_width)
 		height=int(display_factor*screen_height)
-		
 		self.goban_size=min(width,height)
 		
-		goban = Goban(dim,master=popup, width=10, height=10,bg=bg,bd=0, borderwidth=0)
-		goban.space=self.goban_size/(dim+1+1)
+		goban = Goban(dim,self.goban_size,master=popup, width=10, height=10,bg=bg,bd=0, borderwidth=0)
+		goban.space=self.goban_size/(dim+1+1+1)
 		goban.grid(column=2,row=1,rowspan=2,sticky=N+S+E+W)
 		goban.bind("<Enter>",lambda e: self.set_status(_("<Ctrl+Q> to save the goban as an image.")))
 		buttons_with_status.append(goban)
@@ -422,23 +365,23 @@ class LiveAnalysis(Toplevel):
 		self.history=[]
 
 		self.g = sgf.Sgf_game(size=self.dim)
-		self.g.get_root().set("KM", self.komi)
+		node_set(self.g.get_root(),"KM", self.komi)
 		self.g_lock=Lock()
 		self.g.lock=self.g_lock
 		
 		#self.analyser=self.analyser[0](self.g,self.filename)
-		self.analyser=self.analyser["liveanalysis"](self.g,self.filename,self.analyser["profile"])
+		self.analyser=self.analyser["liveanalysis"](self.g,self.rsgf_filename,self.analyser["profile"])
 		
 		first_comment=_("Analysis by GoReviewPartner")
 		first_comment+="\n"+("Bot: %s/%s"%(self.analyser.bot.bot_name,self.analyser.bot.bot_version))
 		first_comment+="\n"+("Komi: %0.1f"%self.komi)
 
-		if Config.getboolean('Analysis', 'SaveCommandLine'):
+		if grp_config.getboolean('Analysis', 'SaveCommandLine'):
 			first_comment+="\n"+("Command line: %s"%self.analyser.bot.command_line)
 
-		self.g.get_root().set("RSGF",first_comment+"\n")
-		self.g.get_root().set("BOT",self.analyser.bot.bot_name)
-		self.g.get_root().set("BOTV",self.analyser.bot.bot_version)
+		node_set(self.g.get_root(),"RSGF",first_comment+"\n")
+		node_set(self.g.get_root(),"BOT",self.analyser.bot.bot_name)
+		node_set(self.g.get_root(),"BOTV",self.analyser.bot.bot_version)
 		
 		self.cpu_lock=Lock()
 		if not self.overlap_thinking:
@@ -474,7 +417,7 @@ class LiveAnalysis(Toplevel):
 
 		row+=1
 		if self.black=="human":
-			player_black=_("Human")
+			player_black=_("Human player")
 		elif self.black=="analyser":
 			player_black=self.analyser.bot.bot_name
 		else:
@@ -482,11 +425,11 @@ class LiveAnalysis(Toplevel):
 			
 		self.game_label=Label(panel,text=_("Black")+": "+player_black)
 		self.game_label.grid(column=1,row=row,sticky=W)
-		self.g.get_root().set("PB",player_black)
+		node_set(self.g.get_root(),"PB",player_black)
 		
 		row+=1
 		if self.white=="human":
-			player_white=_("Human")
+			player_white=_("Human player")
 		elif self.white=="analyser":
 			player_white=self.analyser.bot.bot_name
 		elif self.white=="black":
@@ -496,7 +439,7 @@ class LiveAnalysis(Toplevel):
 			
 		self.game_label=Label(panel,text=_("White")+": "+player_white)
 		self.game_label.grid(column=1,row=row,sticky=W)
-		self.g.get_root().set("PW",player_white)
+		node_set(self.g.get_root(),"PW",player_white)
 		
 		row+=1
 		self.game_label=Label(panel,text=_("Komi")+": "+str(self.komi))
@@ -538,7 +481,7 @@ class LiveAnalysis(Toplevel):
 		Label(panel,text=_("Analysis by %s")%self.analyser.bot.bot_name).grid(column=1,row=row,sticky=W)
 		
 		row+=1
-		Label(panel,text=_("Analysis status:")).grid(column=1,row=row,sticky=W)
+		Label(panel,text=_("Status:")).grid(column=1,row=row,sticky=W)
 		
 		row+=1
 		self.analysis_label=Label(panel,text=_("Ready to start"))
@@ -565,14 +508,14 @@ class LiveAnalysis(Toplevel):
 		if self.handicap>0:
 			self.handicap_stones=[]
 			self.history.append(None)
-			show_info(_("Place %i handicap stones on the board")%self.handicap,self)
+			show_info(_("Please place %i handicap stones on the board.")%self.handicap,self)
 			goban.bind("<Button-1>",lambda e: self.place_handicap(e,self.handicap))
 			
 		else:
 			self.next_color=1		
 			self.current_move=1
-			self.g.get_root().set("PL", "b")
-			write_rsgf(self.filename[:-4]+".rsgf",self.g)
+			node_set(self.g.get_root(),"PL", "b")
+			write_rsgf(self.rsgf_filename,self.g)
 			self.black_to_play()
 		
 		self.status_bar=Label(self,text='',background=bg)
@@ -626,25 +569,7 @@ class LiveAnalysis(Toplevel):
 		
 	def start_review(self):
 		import dual_view
-		
-		app=self.parent
-		screen_width = app.winfo_screenwidth()
-		screen_height = app.winfo_screenheight()
-		
-		Config = ConfigParser.ConfigParser()
-		Config.read("config.ini")
-		
-		display_factor=.5
-		try:
-			display_factor=float(Config.get("Review", "GobanScreenRatio"))
-		except:
-			Config.set("Review", "GobanScreenRatio",display_factor)
-			Config.write(open("config.ini","w"))
-		
-		width=int(display_factor*screen_width)
-		height=int(display_factor*screen_height)
-		
-		new_popup=dual_view.DualView(self.parent,self.filename[:-4]+".rsgf",min(width,height))
+		new_popup=dual_view.DualView(self.parent,self.rsgf_filename)
 		self.parent.add_popup(new_popup)
 
 	def follow_analysis(self):
@@ -699,19 +624,18 @@ class LiveAnalysis(Toplevel):
 				if handicap>1:
 					self.goban.bind("<Button-1>",lambda e: self.place_handicap(e,handicap-1))
 				else:
-					self.g.get_root().set("AB",self.handicap_stones)
-					write_rsgf(self.filename[:-4]+".rsgf",self.g)
-					print self.handicap_stones
+					node_set(self.g.get_root(),"AB",self.handicap_stones)
+					write_rsgf(self.rsgf_filename,self.g)
 					if type(self.black)!=type("abc"):
 						self.black.set_free_handicap([ij2gtp([i,j]) for i,j in self.handicap_stones])
 					if type(self.white)!=type("abc"):
 						self.white.set_free_handicap([ij2gtp([i,j]) for i,j in self.handicap_stones])
 						
-					show_info(_("The game is now starting"),self)
+					show_info(_("The game is now starting!"),self)
 					self.next_color=2
 					#self.goban.bind("<Button-1>",self.click)
 					
-					self.g.get_root().set("PL", "w")
+					node_set(self.g.get_root(),"PL", "w")
 					
 					self.current_move=1
 					self.white_to_play()
@@ -793,7 +717,7 @@ class LiveAnalysis(Toplevel):
 		self.current_move-=2
 		self.game_label.config(text=_("Currently at move %i")%self.current_move)
 		self.parent.after(100,self.after_undo) #enough time for analyser to grab the process lock and process the queue
-		write_rsgf(self.filename[:-4]+".rsgf",self.g)
+		write_rsgf(self.rsgf_filename,self.g)
 		
 	def after_undo(self):
 		self.pass_button.config(state='normal')
@@ -831,7 +755,7 @@ class LiveAnalysis(Toplevel):
 		self.goban.display(self.grid,self.markup)
 		if color==1:
 			self.g.lock.acquire()
-			self.latest_node.set_move('b',None)
+			node_set(self.latest_node,'b',None)
 			self.g.lock.release()
 			self.black_just_passed=True
 			if type(self.white)!=type("abc"):
@@ -841,7 +765,7 @@ class LiveAnalysis(Toplevel):
 			self.white_to_play()
 		else:
 			self.g.lock.acquire()
-			self.latest_node.set_move('w',None)
+			node_set(self.latest_node,'w',None)
 			self.g.lock.release()
 			self.white_just_passed=True
 			if type(self.black)!=type("abc"):
@@ -895,7 +819,7 @@ class LiveAnalysis(Toplevel):
 			self.goban.display(self.grid,self.markup,freeze=True)
 			if color==1:
 				self.g.lock.acquire()
-				self.latest_node.set_move('b',None)
+				node_set(self.latest_node,'b',None)
 				self.g.lock.release()
 				self.black_just_passed=True
 				if type(self.white)!=type("abc"):
@@ -905,7 +829,7 @@ class LiveAnalysis(Toplevel):
 				self.white_to_play()
 			else:
 				self.g.lock.acquire()
-				self.latest_node.set_move('w',None)
+				node_set(self.latest_node,'w',None)
 				self.g.lock.release()
 				self.white_just_passed=True
 				if type(self.black)!=type("abc"):
@@ -932,7 +856,7 @@ class LiveAnalysis(Toplevel):
 			if color==1:
 				#black juste played
 				self.g.lock.acquire()
-				self.latest_node.set_move('b',(i,j))
+				node_set(self.latest_node,'b',(i,j))
 				self.g.lock.release()
 				self.black_just_passed=False
 				if type(self.white)!=type("abc"):
@@ -944,7 +868,7 @@ class LiveAnalysis(Toplevel):
 			else:
 				#white just played
 				self.g.lock.acquire()
-				self.latest_node.set_move('w',(i,j))
+				node_set(self.latest_node,'w',(i,j))
 				self.g.lock.release()
 				self.white_just_passed=False
 				if (type(self.black)!=type("abc")) and (self.white!="black"):
@@ -953,13 +877,12 @@ class LiveAnalysis(Toplevel):
 				self.black_to_play()
 		
 	def black_to_play(self):
-		write_rsgf(self.filename[:-4]+".rsgf",self.g)
 		result=self.pause_lock.acquire(False)
 		if not result:
 			self.parent.after(250,self.black_to_play)
 			return
 		self.pause_lock.release()
-			
+		write_rsgf(self.rsgf_filename,self.g)
 		log("======== move %i ========="%self.current_move)
 		log("black to play")
 		
@@ -992,13 +915,12 @@ class LiveAnalysis(Toplevel):
 			self.bot_to_play()
 	
 	def white_to_play(self):
-		write_rsgf(self.filename[:-4]+".rsgf",self.g)
 		result=self.pause_lock.acquire(False)
 		if not result:
 			self.parent.after(250,self.white_to_play)
 			return
 		self.pause_lock.release()
-		
+		write_rsgf(self.rsgf_filename,self.g)
 		log("======== move %i ========="%self.current_move)
 		log("White to play")
 		
@@ -1081,7 +1003,7 @@ class LiveAnalysis(Toplevel):
 				self.goban.display(self.grid,self.markup,freeze=True)
 				if color==1:
 					self.g.lock.acquire()
-					self.latest_node.set_move('b',None)
+					node_set(self.latest_node,'b',None)
 					self.g.lock.release()
 					self.black_just_passed=True
 					if type(self.white)!=type("abc"):
@@ -1091,7 +1013,7 @@ class LiveAnalysis(Toplevel):
 					self.white_to_play()
 				else:
 					self.g.lock.acquire()
-					self.latest_node.set_move('w',None)
+					node_set(self.latest_node,'w',None)
 					self.g.lock.release()
 					self.white_just_passed=True
 					if type(self.black)!=type("abc"):
@@ -1114,7 +1036,7 @@ class LiveAnalysis(Toplevel):
 				
 				if color==1:
 					self.g.lock.acquire()
-					self.latest_node.set_move('b',(i,j))
+					node_set(self.latest_node,'b',(i,j))
 					self.g.lock.release()
 					self.black_just_passed=False
 					if type(self.white)!=type("abc"):
@@ -1124,7 +1046,7 @@ class LiveAnalysis(Toplevel):
 					self.white_to_play()
 				else:
 					self.g.lock.acquire()
-					self.latest_node.set_move('w',(i,j))
+					node_set(self.latest_node,'w',(i,j))
 					self.g.lock.release()
 					self.white_just_passed=False
 					if type(self.black)!=type("abc"):
@@ -1146,7 +1068,6 @@ class LiveAnalysis(Toplevel):
 		i,j=self.goban.xy2ij(event.x,event.y)
 		color=self.next_color
 		if 0 <= i <= dim-1 and 0 <= j <= dim-1:
-			print "<click>"
 			#inside the grid
 			#what is under the pointer ?
 			
@@ -1171,9 +1092,9 @@ class LiveAnalysis(Toplevel):
 				self.g.lock.acquire()
 				node = self.latest_node
 				if color==1:
-					node.set_move("b", (i,j))
+					node_set(node,"b", (i,j))
 				else:
-					node.set_move("w", (i,j))
+					node_set(node,"w", (i,j))
 				self.g.lock.release()
 				
 				
@@ -1197,7 +1118,13 @@ class LiveAnalysis(Toplevel):
 	
 	def redraw(self, event):
 		new_size=min(event.width,event.height)
-		new_space=new_size/(self.dim+1+1)
+		
+		screen_width = self.parent.winfo_screenwidth()
+		screen_height = self.parent.winfo_screenheight()
+		ratio=1.0*new_size/min(screen_width,screen_height)
+		grp_config.set("Live", "LiveGobanRatio",ratio)
+		
+		new_space=new_size/(self.dim+1+1+1)
 		self.goban.space=new_space
 		
 		new_anchor_x=(event.width-new_size)/2.

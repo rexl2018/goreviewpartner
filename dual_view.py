@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 
 from Tkinter import *
 from ScrolledText import *
@@ -11,7 +12,7 @@ from toolbox import _
 import os
 
 from gtp import gtp
-import ConfigParser
+
 
 import threading, Queue
 
@@ -28,15 +29,11 @@ class OpenChart(Toplevel):
 		self.data=data
 		self.current_move=current_move
 
-		
-		
 		popup_width=self.parent.winfo_width()
 		popup_height=self.parent.winfo_height()/2+10
 		self.geometry(str(popup_width)+'x'+str(popup_height))
 		
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
-		self.last_graph=Config.get("Review","LastGraph").decode("utf")
+		self.last_graph=grp_config.get("Review","LastGraph")
 		self.initialize()
 
 	def close(self):
@@ -45,11 +42,7 @@ class OpenChart(Toplevel):
 		self.parent.remove_popup(self)
 		log("done")
 
-
-
 	def initialize(self):
-		
-		    
 		for widget in self.pack_slaves():
 			widget.destroy()
 		
@@ -131,10 +124,10 @@ class OpenChart(Toplevel):
 		
 		self.graph_selection=apply(OptionMenu,(top_frame,self.graph_mode)+tuple(available_graphs))
 		self.graph_selection.pack(side=LEFT, padx=5)
-		if self.last_graph in [mode.decode("utf") for mode in available_graphs]:
+		if self.last_graph in [mode for mode in available_graphs]:
 			self.graph_mode.set(self.last_graph)
 		else:
-			self.last_graph=available_graphs[0].decode("utf")
+			self.last_graph=available_graphs[0]
 			self.graph_mode.set(self.last_graph)
 			
 		self.graph_mode.trace("w", lambda a,b,c: self.change_graph())
@@ -172,7 +165,6 @@ class OpenChart(Toplevel):
 	
 	def display_vertical_winrate_graduation(self,border,height,width):
 		#drawing vertical graduation
-		lpix=int(border/4)
 		graduations=[x*10 for x in range(10+1)]
 		y0=height+1000
 		x0=border/2
@@ -181,39 +173,35 @@ class OpenChart(Toplevel):
 			y1=height-border-g*(height-2*border)/100.
 			
 			if y0-y1>=border:
-				self.chart.create_text(x0,y1, text=str(g)+"%",fill='black',font=("Arial", str(lpix)))
-				self.chart.create_text(x1,y1, text=str(g)+"%",fill='black',font=("Arial", str(lpix)))
+				self.chart.create_text(x0,y1, text=str(g)+"%",fill='black',font=self.font)
+				self.chart.create_text(x1,y1, text=str(g)+"%",fill='black',font=self.font)
 				#self.chart.create_line(x0, y1, x1, y1, fill='black')
 				y0=y1
 	
 	def display_vertical_score_graduation(self,border,height,width,maximum):
 		#drawing vertical graduation
-		lpix=int(border/4)
-		graduations=[x*20 for x in range(int(-maximum/20.),int((maximum+20)/20.))]
-		y0=height+1000
+		graduations=[x*2 for x in range(0,int((maximum+2)/2.))]
 		x0=border/2
-		x1=width-border/2
 		middle=height-border-(height-2*border)/2
+		#placing 0 first
+		y0=middle
+		self.chart.create_text(x0,y0, text="0",fill='black',font=self.font)
+		self.chart.create_line(border-3, y0, border+3, y0, fill='black')
 		for g in graduations:
-			y1=height-border-g*(height-2*border)/100.
-			y1=g/2*(height-2*border)/maximum
-			y1=middle-y1
-			if y0-y1>=border:
-				self.chart.create_text(x0,y1, text=str(g),fill='black',font=("Arial", str(lpix)))
-				self.chart.create_text(x1,y1, text=str(g),fill='black',font=("Arial", str(lpix)))
-				#self.chart.create_line(x0, y1, x1, y1, fill='black')
+			y1=middle+g/2*(height-2*border)/maximum
+			y2=middle-g/2*(height-2*border)/maximum
+			if y1-y0>=border/2:
+				self.chart.create_text(x0,y1, text=str(-g),fill='black',font=self.font)
+				self.chart.create_text(x0,y2, text=str(g),fill='black',font=self.font)
+				self.chart.create_line(border-3, y1, border+3, y1, fill='black')
+				self.chart.create_line(width-border-3, y1, width-border+3, y1, fill='black')
+				self.chart.create_line(border-3, y2, border+3, y2, fill='black')
+				self.chart.create_line(width-border-3, y2, width-border+3, y2, fill='black')
 				y0=y1
 	
 	def change_graph(self,event=None):
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
-		
 		self.last_graph=_(self.graph_mode.get())
-		if type(self.last_graph)!=type(u"utf"):
-			self.last_graph=self.last_graph.decode("utf8")
-		
-		Config.set("Review","LastGraph",self.last_graph.encode("utf"))
-		Config.write(open(config_file,"w"))
+		grp_config.set("Review","LastGraph",self.last_graph)
 		self.display()
 		
 	def display(self,event=None):
@@ -222,13 +210,28 @@ class OpenChart(Toplevel):
 			height=event.height
 			self.width=width
 			self.height=height
+			
+			#let's estimate the ratio fontsize/pixel
+			offset=-1000000
+			idt=self.chart.create_text(offset,offset, text="0",font=("TkFixedFont", 1000))
+			x1,y1,x2,y2=self.chart.bbox(idt) 
+			ratio=max(x2-x1,y2-y1)/1000.
+			#let's measure one letter's size from a tkinter widget
+			police = tkFont.nametofont("TkFixedFont")
+			self.lpix = 2*police.measure("0")
+			#let's adjust the fontsize to match the letter's size
+			fontsize=int(round(self.lpix/ratio))
+			self.border=4.5*fontsize
+			self.font=("TkFixedFont",str(fontsize))
+			
+			
 		else:
 			width=self.width
 			height=self.height
 		
-		border=min(max(20,width/25),200)
-		space=1.0*(width-2*border)/self.nb_moves
-		lpix=int(border/4)
+		border=self.border
+		lpix=self.lpix
+		space=1.0*(width-2*border)/(self.nb_moves+1)
 		
 		for item in self.chart.find_all():
 			self.chart.delete(item)
@@ -241,24 +244,24 @@ class OpenChart(Toplevel):
 		y00=height-border
 		x0=border+(self.current_move-1)*space
 		x1=x0+space
-		y1=border
+		y1=border-5
 		self.chart.create_rectangle(x0, y00, x1, y1, fill='#FFFF00',outline='#FFFF00')#yellow_bar
 		
 		mode=self.last_graph
 
-		if mode in (_("Black win rate delta").decode("utf"),_("White win rate delta").decode("utf")):
+		if mode in (_("Black win rate delta"),_("White win rate delta")):
 			moves=self.display_winrate_delta(border,height,width)
-		elif mode==_("Win rate").decode("utf"):
+		elif mode==_("Win rate"):
 			moves=self.display_winrate_graph(border,height,width,lpix)
-		elif mode==_("Score estimation").decode("utf"):
+		elif mode==_("Score estimation"):
 			moves=self.display_score_graph(border,height,width,lpix)
-		elif mode==_("Monte Carlo win rate").decode("utf"):
+		elif mode==_("Monte Carlo win rate"):
 			moves=self.display_monte_carlo_winrate_graph(border,height,width,lpix)
-		elif mode==_("Value Network win rate").decode("utf"):
+		elif mode==_("Value Network win rate"):
 			moves=self.display_value_network_winrate_graph(border,height,width,lpix)
-		elif mode in (_("Black Monte Carlo win rate delta").decode("utf"),_("White Monte Carlo win rate delta").decode("utf")):
+		elif mode in (_("Black Monte Carlo win rate delta"),_("White Monte Carlo win rate delta")):
 			moves=self.display_monte_carlo_delta(border,height,width)
-		elif mode in (_("Black Value Network win rate delta").decode("utf"),_("White Value Network win rate delta").decode("utf")):
+		elif mode in (_("Black Value Network win rate delta"),_("White Value Network win rate delta")):
 			moves=self.display_value_network_delta(border,height,width)
 		
 		self.display_horizontal_graduation(moves,height,width,border,lpix)
@@ -267,7 +270,7 @@ class OpenChart(Toplevel):
 	def display_value_network_delta(self,border,height,width):
 		moves=[]
 		space=1.0*(width-2*border)/(self.nb_moves+1)
-		if self.graph_mode.get()==_("Black Value Network win rate delta").decode("utf"):
+		if self.graph_mode.get()==_("Black Value Network win rate delta"):
 			player_color='b'
 		else:
 			player_color='w'
@@ -290,9 +293,9 @@ class OpenChart(Toplevel):
 				delta=one_data["vnwr_delta"]
 				
 				if player_color.lower()=="b":
-					msg=_("Move %i: Black's move win rate: %s, computer's move win rate: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
+					msg=_("Move %i: win rate of Black's move: %s; win rate of computer move: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
 				else:
-					msg=_("Move %i: White's move win rate: %s, computer's move win rate: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
+					msg=_("Move %i: win rate of White's move: %s; win rate of computer move: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
 				
 				self.chart.tag_bind(grey_bar, "<Enter>", partial(self.set_status,msg=msg))
 				self.chart.tag_bind(grey_bar, "<Leave>", self.clear_status)
@@ -324,7 +327,7 @@ class OpenChart(Toplevel):
 	def display_monte_carlo_delta(self,border,height,width):
 		moves=[]
 		space=1.0*(width-2*border)/(self.nb_moves+1)
-		if self.graph_mode.get()==_("Black Monte Carlo win rate delta").decode("utf"):
+		if self.graph_mode.get()==_("Black Monte Carlo win rate delta"):
 			player_color='b'
 		else:
 			player_color='w'
@@ -347,9 +350,9 @@ class OpenChart(Toplevel):
 				delta=one_data["mcwr_delta"]
 				
 				if player_color.lower()=="b":
-					msg=_("Move %i: Black's move win rate: %s, computer's move win rate: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
+					msg=_("Move %i: win rate of Black's move: %s; win rate of computer move: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
 				else:
-					msg=_("Move %i: White's move win rate: %s, computer's move win rate: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
+					msg=_("Move %i: win rate of White's move: %s; win rate of computer move: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
 				
 				self.chart.tag_bind(grey_bar, "<Enter>", partial(self.set_status,msg=msg))
 				self.chart.tag_bind(grey_bar, "<Leave>", self.clear_status)
@@ -381,7 +384,7 @@ class OpenChart(Toplevel):
 	def display_winrate_delta(self,border,height,width):
 		moves=[]
 		space=1.0*(width-2*border)/(self.nb_moves+1)
-		if self.graph_mode.get()==_("Black win rate delta").decode("utf"):
+		if self.graph_mode.get()==_("Black win rate delta"):
 			player_color='b'
 		else:
 			player_color='w'
@@ -404,9 +407,9 @@ class OpenChart(Toplevel):
 				delta=one_data["winrate_delta"]
 				
 				if player_color.lower()=="b":
-					msg=_("Move %i: Black's move win rate: %s, computer's move win rate: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
+					msg=_("Move %i: win rate of Black's move: %s; win rate of computer move: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
 				else:
-					msg=_("Move %i: White's move win rate: %s, computer's move win rate: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
+					msg=_("Move %i: win rate of White's move: %s; win rate of computer move: %s")%(move,str(position_win_rate+delta)+"%",str(position_win_rate)+"%")
 				
 				self.chart.tag_bind(grey_bar, "<Enter>", partial(self.set_status,msg=msg))
 				self.chart.tag_bind(grey_bar, "<Leave>", self.clear_status)
@@ -437,9 +440,9 @@ class OpenChart(Toplevel):
 
 	def display_value_network_winrate_graph(self,border,height,width,lpix):
 		moves=[]
-		space=1.0*(width-2*border)/self.nb_moves
+		space=1.0*(width-2*border)/(self.nb_moves+1)
 		
-		self.chart.create_text(len(_("Black win rate"))*lpix/2,border/2, text=_("Black win rate"),fill='black',font=("Arial", str(lpix)))
+		self.chart.create_text(len(_("Black win rate"))*lpix/2,border/2, text=_("Black win rate"),fill='black',font=self.font)
 		x00=border
 		y00=height-border-(height-2*border)/2.
 		for one_data in self.data:
@@ -478,9 +481,9 @@ class OpenChart(Toplevel):
 		
 	def display_monte_carlo_winrate_graph(self,border,height,width,lpix):
 		moves=[]
-		space=1.0*(width-2*border)/self.nb_moves
+		space=1.0*(width-2*border)/(self.nb_moves+1)
 		
-		self.chart.create_text(len(_("Black win rate"))*lpix/2,border/2, text=_("Black win rate"),fill='black',font=("Arial", str(lpix)))
+		self.chart.create_text(len(_("Black win rate"))*lpix/2,border/2, text=_("Black win rate"),fill='black',font=self.font)
 		x00=border
 		y00=height-border-(height-2*border)/2.
 		for one_data in self.data:
@@ -520,9 +523,9 @@ class OpenChart(Toplevel):
 
 	def display_winrate_graph(self,border,height,width,lpix):
 		moves=[]
-		space=1.0*(width-2*border)/self.nb_moves
+		space=1.0*(width-2*border)/(self.nb_moves+1)
 		
-		self.chart.create_text(len(_("Black win rate"))*lpix/2,border/2, text=_("Black win rate"),fill='black',font=("Arial", str(lpix)))
+		self.chart.create_text(len(_("Black win rate"))*lpix/2,border/2, text=_("Black win rate"),fill='black',font=self.font)
 		x00=border
 		y00=height-border-(height-2*border)/2.
 		for one_data in self.data:
@@ -560,8 +563,8 @@ class OpenChart(Toplevel):
 		return moves
 
 	def display_score_graph(self,border,height,width,lpix):
-		self.chart.create_text(border+len(_("Black win"))*lpix/2,border+lpix, text=_("Black win"),fill='black',font=("Arial", str(lpix)))
-		self.chart.create_text(border+len(_("White win"))*lpix/2,height-border-lpix, text=_("White win"),fill='black',font=("Arial", str(lpix)))
+		self.chart.create_text(border+len(_("Win for Black"))*lpix/2,border+lpix, text=_("Win for Black"),fill='black',font=self.font)
+		self.chart.create_text(border+len(_("Win for White"))*lpix/2,height-border-lpix, text=_("Win for White"),fill='black',font=self.font)
 		moves=[]
 		#checking graph limits
 		maximum=-1000
@@ -569,7 +572,7 @@ class OpenChart(Toplevel):
 			if "score_estimation" in one_data:
 				maximum=max(maximum,max([abs(x) for x in (one_data["upper_bound_score"],one_data["lower_bound_score"],one_data["score_estimation"])]))
 		maximum+=5
-		space=1.0*(width-2*border)/self.nb_moves
+		space=1.0*(width-2*border)/(self.nb_moves+1)
 		middle=height-border-(height-2*border)/2
 		x00=border
 		y00=middle
@@ -646,10 +649,10 @@ class OpenChart(Toplevel):
 		y0=height-border/2
 		y1=height-border
 		for g in graduations:
-			x1=border+(g)*(width-2*border)/self.nb_moves*1.0
+			x1=border+(g-0.5)*(width-2*border)/self.nb_moves*1.0
 			
-			if x1-x0>=border:
-				self.chart.create_text(x1,y0, text=str(g),fill='black',font=("Arial", str(lpix)))
+			if x1-x0>=border/1.5:
+				self.chart.create_text(x1,y0, text=str(g),fill='black',font=self.font)
 				self.chart.create_line(x1, y1, x1, (y0+y1)/2, fill='black')
 				x0=x1
 		
@@ -660,14 +663,20 @@ class OpenChart(Toplevel):
 
 
 class OpenMove(Toplevel):
-	def __init__(self,parent,move,dim,sgf,goban_size=200):
+	def __init__(self,parent,move,dim,sgf):
 		Toplevel.__init__(self,parent)
 		self.parent=parent
 		self.move=move
 		self.dim=dim
 		self.sgf=sgf
-		self.goban_size=goban_size
 		
+		display_factor=grp_config.getfloat("Review", "OpenGobanRatio")
+		screen_width = self.parent.winfo_screenwidth()
+		screen_height = self.parent.winfo_screenheight()
+		width=int(display_factor*screen_width)
+		height=int(display_factor*screen_height)
+		self.goban_size=min(width,height)
+
 		self.available_bots=[]
 		for bot in get_available("ReviewBot"):
 			self.available_bots.append(bot)
@@ -688,7 +697,7 @@ class OpenMove(Toplevel):
 		self.goban.bind("<Button-2>",self.do_nothing)
 		self.locked=True
 
-	def do_nothing(self):
+	def do_nothing(self,event=None):
 		pass
 
 	def unlock(self):
@@ -733,7 +742,7 @@ class OpenMove(Toplevel):
 
 	def click_button(self,bot):
 		dim=self.dim
-		self.lock()
+		self.display_queue.put(3)
 		self.display_queue.put(2)
 		color=self.next_color
 		move=bot.click(color)
@@ -759,10 +768,7 @@ class OpenMove(Toplevel):
 			self.markup[i][j]=0
 			self.next_color=3-color
 		else:
-			if move.lower() == "resign":
-				bot.undo_resign()
-			else:
-				bot.undo()
+			bot.undo()
 			if color==1:
 				self.display_queue.put(bot.name+" ("+_("Black")+"): "+move.lower())
 			else:
@@ -778,12 +784,12 @@ class OpenMove(Toplevel):
 			else:
 				log("End of SELF PLAY")
 				self.click_selfplay()
+				self.display_queue.put(4)
 				self.display_queue.put(1)
-				self.unlock()
 				return
 		else:
+			self.display_queue.put(4)
 			self.display_queue.put(1)
-			self.unlock()
 			return
 		
 		
@@ -910,26 +916,21 @@ class OpenMove(Toplevel):
 	
 	def click_evaluation(self):
 		log("Asking",self.selected_bot.get(),"for quick estimation")
-		self.lock()
+		self.display_queue.put(3)
 		self.display_queue.put(2)
 		threading.Thread(target=self.evaluation,args=(self.menu_bots[self.selected_bot.get()],)).start()
 	
 	def evaluation(self,bot):
 		color=self.next_color
 		result=bot.quick_evaluation(color)
+		self.display_queue.put(4)
 		if color==1:
 			self.display_queue.put(result)
 		else:
 			self.display_queue.put(result)
-		self.unlock()
-	
+		
 	def initialize(self):
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
-		
-
 		gameroot=self.sgf.get_root()
-		
 		popup=self
 		
 		dim=self.dim
@@ -1003,7 +1004,7 @@ class OpenMove(Toplevel):
 			row+=1
 			self.selfplay_button=Button(panel, text=_('Self play'),command=self.click_selfplay)
 			self.selfplay_button.grid(column=0,row=row,sticky=E+W)
-			self.selfplay_button.bind("<Enter>",lambda e: self.set_status(_("Ask the bot to play alone.")))
+			self.selfplay_button.bind("<Enter>",lambda e: self.set_status(_("Let the bot take both sides and play against itself.")))
 			self.selfplay_button.bind("<Leave>",lambda e: self.clear_status())
 		
 			row+=1
@@ -1020,8 +1021,8 @@ class OpenMove(Toplevel):
 		
 		panel.grid(column=1,row=1,sticky=N+S)
 		
-		goban3 = Goban(dim,master=popup, width=10, height=10,bg=bg,bd=0, borderwidth=0)
-		goban3.space=self.goban_size/(dim+1+1)
+		goban3 = Goban(dim,self.goban_size,master=popup, width=10, height=10,bg=bg,bd=0, borderwidth=0)
+		goban3.space=self.goban_size/(dim+1+1+1)
 		goban3.grid(column=2,row=1,sticky=N+S+E+W)
 		popup.grid_rowconfigure(1, weight=1)
 		popup.grid_columnconfigure(2, weight=1)
@@ -1110,7 +1111,7 @@ class OpenMove(Toplevel):
 		self.goban.bind("<Configure>",self.redraw)
 		popup.focus()
 		
-		self.display_queue=Queue.Queue(1)
+		self.display_queue=Queue.Queue(2)
 		self.parent.after(100,self.wait_for_display)
 	
 	def wait_for_display(self):
@@ -1124,24 +1125,36 @@ class OpenMove(Toplevel):
 			elif msg==2:
 				self.goban.display(self.grid,self.markup,True)
 				self.parent.after(100,self.wait_for_display)
+			elif msg==3:
+				self.lock()
+				self.wait_for_display()
+			elif msg==4:
+				self.unlock()
+				self.wait_for_display()
 			elif type(msg)==type((1,1)):
 				i,j=msg
 				if self.grid[i][j]==1:
 					self.goban.black_stones[i][j].shine()
 				else:
 					self.goban.white_stones[i][j].shine()
-				self.parent.after(0,self.wait_for_display)
+				self.wait_for_display()
 			else:
 				show_info(msg,self)
 				self.goban.display(self.grid,self.markup)
-				self.parent.after(0,self.wait_for_display)
+				self.wait_for_display()
 		except:
 			self.parent.after(250,self.wait_for_display)
 		
 	
 	def redraw(self, event):
 		new_size=min(event.width,event.height)
-		new_space=new_size/(self.dim+1+1)
+		
+		screen_width = self.parent.winfo_screenwidth()
+		screen_height = self.parent.winfo_screenheight()
+		ratio=1.0*new_size/min(screen_width,screen_height)
+		grp_config.set("Review", "OpenGobanRatio",ratio)
+		
+		new_space=new_size/(self.dim+1+1+1)
 		self.goban.space=new_space
 		
 		new_anchor_x=(event.width-new_size)/2.
@@ -1169,33 +1182,62 @@ class Table(Toplevel):
 		log("opening table for move",current_move)
 		
 		self.protocol("WM_DELETE_WINDOW", self.close)
+
 		self.parent=parent
+
+		self.table = TableWidget(self,parent,gameroot,current_move,grid,markup)
+
+	def display_move(self,current_move,grid,markup):
+		self.table.display_move(current_move,grid,markup)
+
+
+class TableWidget:
+	def __init__(self,widget,parent,gameroot,current_move,grid,markup):
+		log("creating table widget",current_move)
 		
+		self.parent=parent
+		self.widget=widget
 		self.gameroot=gameroot
-		
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
-		self.maxvariations=int(Config.get("Review", "MaxVariations"))
-		
+
+		self.maxvariations=grp_config.getint("Review", "MaxVariations")
+		self.my_labels={}
+		self.dframe=None
+		self.table_frame=None
 		self.display_move(current_move,grid,markup)
 		
-	def display_move(self,current_move,grid,markup):
-		new_popup=self
 		
-		for widget in new_popup.winfo_children():
-			widget.destroy()
+	def get_label(self,name,container):
+		if name in self.my_labels:
+			return self.my_labels[name]
+		if type(name)==type("abc"):
+			if name=="node comments":
+				new_label=Label(container,justify=LEFT)
+				new_label.grid(row=1,column=1,columnspan=100,sticky=W+N)
+				self.my_labels[name]=new_label
+				return new_label
+		else:
+			row,column=name
+			new_label=Label(container)
+			new_label.grid(row=row,column=column,sticky=W+E)
+			self.my_labels[name]=new_label
+			return new_label
+		
+		
+	def display_move(self,current_move,grid,markup):
+		new_popup=self.widget
+		
+		for widget in self.my_labels.values():
+			widget.config(text="")
+			widget.unbind("<Enter>")
 		
 		self.current_move=current_move
-		Label(new_popup,text=" ").grid(row=0,column=0)
-		Label(new_popup,text=" ").grid(row=1000,column=1000)
-
-		row=1
-		comments=get_position_comments(self.current_move,self.gameroot)
-		Label(new_popup,text=comments,justify=LEFT).grid(row=row,column=1,columnspan=100,sticky=W)
 		
-		Label(new_popup,text=" ").grid(row=row+1,column=0)
+		comments=get_position_short_comments(self.current_move,self.gameroot)
+		one_label=self.get_label("node comments",self.widget) #get or create that label widget
+		one_label.config(text=comments)
 		
-		columns_header=[_("Move"),'nothing here',_("Win rate"),_("Monte Carlo win rate"),_("Value Network win rate"),_("Policy Network value"),_("Playouts"),_("Evaluation"),_("RAVE"),_("Score estimation")]
+		columns_header=["MOVE",'nothing here',"WR","MCWR","VNWR","PNV","PO","EV","RAVE","SCORE"]
+		columns_header_status_msg=[_("Move"),_("Move"),_("Win rate"),_("Monte Carlo win rate"),_("Value Network win rate"),_("Policy Network value"),_("Playouts"),_("Evaluation"),_("RAVE"),_("Score Estimation")]
 		columns_sgf_properties=["nothing here","nothing here","BWWR","MCWR","VNWR","PNV","PLYO","EVAL","RAVE","ES"]
 		parent=get_node(self.gameroot,self.current_move-1)
 		nb_variations=min(len(parent),self.maxvariations+1)
@@ -1208,13 +1250,17 @@ class Table(Toplevel):
 			c=0
 			
 			for key in columns_sgf_properties:
-				if one_alternative.has_property(key):
-					value=one_alternative.get(key)
+				if node_has(one_alternative,key):
+					value=node_get(one_alternative,key)
 					if "%/" in value:
 						if color=="b":
-							value=value.split("/")[0]
+							value=float(value.split("%/")[0])
+							value=round(value,2)
+							value=str(value)+"%"
 						else:
-							value=value.split("/")[1]
+							value=float(value.split("/")[1][:-1])
+							value=round(value,2)
+							value=str(value)+"%"
 					columns[c][a]=value
 				c+=1
 			columns[0][a]="ABCDEFGHIJKLMNOPQRSTUVWXYZ"[a-1]
@@ -1226,13 +1272,17 @@ class Table(Toplevel):
 			one_alternative=parent[0][1]
 			c=0
 			for key in columns_sgf_properties:
-				if one_alternative.has_property(key):
-					value=one_alternative.get(key)
+				if node_has(one_alternative,key):
+					value=node_get(one_alternative,key)
 					if "%/" in value:
 						if parent[0].get_move()[0].lower()=="b":
-							value=value.split("/")[0]
+							value=float(value.split("%/")[0])
+							value=round(value,2)
+							value=str(value)+"%"
 						else:
-							value=value.split("/")[1]
+							value=float(value.split("/")[1][:-1])
+							value=round(value,2)
+							value=str(value)+"%"
 					columns[c][0]=value
 				c+=1
 		except:
@@ -1248,43 +1298,89 @@ class Table(Toplevel):
 				columns_header[c]=None
 			c+=1
 		
-		row=10
-		new_popup=Frame(new_popup,bd=2,relief=RIDGE)
-		new_popup.grid(row=row,column=10)
+		row=2
+		if self.dframe==None:
+			self.dframe=Frame(new_popup)
+			self.dframe.grid(row=row,column=1,columnspan=100,sticky=W+N)
+
+		c=0
+		deltas_strings = ["WR","BWWR","MC", "MCWR","VN","VNWR"]
+		deltas_strings_status_msg=[_("Win Rate"),"",_("Monte Carlo win rate"), "",_("Value Network win rate"),""]
+		for i in range(0,len(deltas_strings),2):
+			idx = columns_sgf_properties.index(deltas_strings[i+1])
+			if columns[1][0]==columns[1][1]:
+				delta = 0
+				dtext = "+0pp"
+				status_msg=""
+			elif( columns_header[idx] and columns[idx][0] and columns[idx][1] ):
+				delta = float(columns[idx][0].split("%")[0]) - float(columns[idx][1].split("%")[0])
+				dtext = "%+.2fpp"%delta
+				if delta > 0:
+					status_msg="The computer believes the actual move is %.2fpp better than it's best move."%delta
+				else:
+					status_msg="The computer believes it's own move win rate would be %.2fpp higher."%(-delta)
+			else:
+				delta = None
+				dtext = "NA"
+				status_msg=_("Not available")
+			one_label=self.get_label((0,c),self.dframe)
+			one_label.config(text=deltas_strings[i]+":")
+			one_label.bind("<Enter>",partial(self.set_status,msg=deltas_strings_status_msg[i]))
+			one_label.bind("<Leave>",lambda e: self.clear_status())
+			another_label=self.get_label((0,c+1),self.dframe)
+			another_label.config(text=dtext+" ",fg="black" if delta is None or delta == 0 else "red" if delta < 0 else "darkgreen")
+			another_label.bind("<Enter>",partial(self.set_status,msg=status_msg))
+			another_label.bind("<Leave>",lambda e: self.clear_status())
+			c = c + 2
 		
+		if not self.table_frame:
+			row=10
+			self.table_frame=LabelFrame(new_popup)
+			self.table_frame.grid(row=row,column=10,sticky=W+N,pady=10)
 		row=10
 		c=0
-		for header in columns_header:
+		for header,status_msg in zip(columns_header,columns_header_status_msg):
 			if header:
 				if c==0:
-					Label(new_popup,text=header,relief=RIDGE).grid(row=row,column=10+c,columnspan=2,sticky=W+E)
+					one_label=self.get_label((row,10+c),self.table_frame)
+					one_label.config(text=header,relief=RIDGE,bd=2,width=6)
+					one_label.grid(columnspan=2)
 				elif c==1:
 					pass
 				else:
-					Label(new_popup,text=header,relief=RIDGE).grid(row=row,column=10+c,sticky=W+E)
-				Frame(new_popup,height=2,bd=1,relief=RIDGE).grid(row=row+1,column=10+c,sticky=W+E)
+					one_label=self.get_label((row,10+c),self.table_frame)
+					one_label.config(text=header,relief=RIDGE,bd=2,width=7)
+				one_label.bind("<Enter>",partial(self.set_status,msg=status_msg))
+				one_label.bind("<Leave>",lambda e: self.clear_status())
 			c+=1
 		row+=2
 		
 		for r in range(nb_variations):
 			for c in range(len(columns)):
 				if columns_header[c]:
-					one_label=Label(new_popup,text=columns[c][r],relief=RIDGE)
-					one_label.grid(row=row+r,column=10+c,sticky=W+E)
+					one_label=self.get_label((row+r,10+c),self.table_frame)
+					one_label.config(text=columns[c][r],relief=RIDGE)
+					
 					if r>0:
 						i,j=gtp2ij(columns[1][r])
 						one_label.bind("<Enter>",partial(self.parent.show_variation,goban=self.parent.goban2,grid=grid,markup=markup,i=i,j=j))
 						one_label.bind("<Leave>", lambda e: self.parent.leave_variation(self.parent.goban2,grid,markup))
-			if r==0:
-				row+=1
-				for c in range(len(columns)):
-					if columns_header[c]:
-						Frame(new_popup,height=2,bd=1,relief=RIDGE).grid(row=row+r,column=10+c,sticky=W+E)
-			
-				
+					else:
+						one_label.config(bd=2)
+					
+					if c==0:
+						one_label.config(width=2)
+					elif c==1:
+						one_label.config(width=4)
+	def clear_status(self):
+		self.parent.clear_status()
+	
+	def set_status(self,event,msg):
+		self.parent.set_status(msg)
+
 
 class DualView(Toplevel):
-	def __init__(self,parent,filename,goban_size=200):
+	def __init__(self,parent,filename):
 		Toplevel.__init__(self,parent)
 		self.parent=parent
 		self.filename=filename
@@ -1292,13 +1388,13 @@ class DualView(Toplevel):
 
 		self.leaving_var = True
 		
-		global Config, goban
-		Config = ConfigParser.ConfigParser()
-		Config.read(config_file)
-		goban.fuzzy=float(Config.get("Review", "FuzzyStonePlacement"))
-		self.variation_color_mode=Config.get("Review", "VariationsColoring")
-		self.inverted_mouse_wheel=Config.getboolean('Review', 'InvertedMouseWheel')
-		self.variation_label=Config.get('Review', 'VariationsLabel')
+
+		
+		global goban
+		goban.fuzzy=grp_config.getfloat("Review", "FuzzyStonePlacement")
+		self.variation_color_mode=grp_config.get("Review", "VariationsColoring")
+		self.inverted_mouse_wheel=grp_config.getboolean('Review', 'InvertedMouseWheel')
+		self.variation_label=grp_config.get('Review', 'VariationsLabel')
 		
 		self.initialize()
 		
@@ -1374,7 +1470,10 @@ class DualView(Toplevel):
 					popup.display()
 				elif isinstance(popup,Table):
 					popup.display_move(self.current_move,self.goban2.grid,self.goban2.markup)
-					
+			# if the table is docked
+			if self.table_frame and self.table_frame.grid_info() :
+				self.table_widget.display_move(self.current_move,self.goban2.grid,self.goban2.markup)
+
 		elif self.pressed==pressed:
 			self.display_move(self.current_move)
 			for popup in self.popups:
@@ -1384,7 +1483,10 @@ class DualView(Toplevel):
 					popup.display()
 				elif isinstance(popup,Table):
 					popup.display_move(self.current_move,self.goban2.grid,self.goban2.markup)
-					
+			# if the table is docked
+			if self.table_frame and self.table_frame.grid_info() :
+				self.table_widget.display_move(self.current_move,self.goban2.grid,self.goban2.markup)
+
 		self.update_idletasks()
 		
 	def leave_variation(self,goban,grid,markup):
@@ -1448,11 +1550,11 @@ class DualView(Toplevel):
 		self.bind("<Down>", self.show_variation_prev)
 		self.bind("<MouseWheel>", self.mouse_wheel)
 		if not self.inverted_mouse_wheel:
-			goban.tag_bind(local_area,"<Button-4>", self.show_variation_next)
-			goban.tag_bind(local_area,"<Button-5>", self.show_variation_prev)
+			self.bind("<Button-4>", self.show_variation_next)
+			self.bind("<Button-5>", self.show_variation_prev)
 		else:
-			goban.tag_bind(local_area,"<Button-5>", self.show_variation_next)
-			goban.tag_bind(local_area,"<Button-4>", self.show_variation_prev)
+			self.bind("<Button-5>", self.show_variation_next)
+			self.bind("<Button-4>", self.show_variation_prev)
 		self.set_status(_("Use mouse wheel or keyboard up/down keys to display the sequence move by move."))
 	
 	def mouse_wheel(self,event):
@@ -1507,7 +1609,7 @@ class DualView(Toplevel):
 
 			try:
 				one_data['player_color']=guess_color_to_play(self.gameroot,m) #which turn it is to play
-			except Exception, e:
+			except:
 				pass
 			
 			try:
@@ -1518,7 +1620,7 @@ class DualView(Toplevel):
 				pass
 			
 			try:
-				es=one_move.get('ES')
+				es=node_get(one_move,'ES')
 				if es[0]=="B":	
 					one_data['score_estimation']=float(es[1:])
 				else:
@@ -1531,7 +1633,7 @@ class DualView(Toplevel):
 				pass
 			
 			try:
-				ubs=one_move.get('UBS')
+				ubs=node_get(one_move,'UBS')
 				if ubs[0]=="B":	
 					one_data['upper_bound_score']=float(ubs[1:])
 				else:
@@ -1540,7 +1642,7 @@ class DualView(Toplevel):
 				pass
 			
 			try:
-				lbs=one_move.get('LBS')
+				lbs=node_get(one_move,'LBS')
 				if lbs[0]=="B":	
 					one_data['lower_bound_score']=float(lbs[1:])
 				else:
@@ -1549,7 +1651,7 @@ class DualView(Toplevel):
 				pass
 			
 			try:
-				winrate=one_move.get('MCWR')
+				winrate=node_get(one_move,'MCWR')
 				if player_color in ('b',"B"):
 					one_data['monte_carlo_win_rate']=float(winrate.split("%")[0])
 				else:
@@ -1558,7 +1660,7 @@ class DualView(Toplevel):
 				pass
 			
 			try:
-				winrate=one_move.get('VNWR')
+				winrate=node_get(one_move,'VNWR')
 				if player_color in ('b',"B"):
 					one_data['value_network_win_rate']=float(winrate.split("%")[0])
 				else:
@@ -1570,7 +1672,7 @@ class DualView(Toplevel):
 			#so it is the win rate of the best move by the computer for this position
 			#because we consider the bot plays perfectly
 			try:
-				winrate=one_move.get('BWWR')
+				winrate=node_get(one_move,'BWWR')
 				if player_color in ('w',"W"):
 					current_position_win_rate=float(winrate.split("/")[1][:-1])
 				else:
@@ -1587,12 +1689,12 @@ class DualView(Toplevel):
 			# negative delta means the game evolves better when the computer move is played
 			try:
 				next_move=get_node(self.gameroot,m+1)
-				winrate=next_move.get('BWWR')
+				winrate=node_get(next_move,'BWWR')
 				if player_color in ('w',"W"):
 					next_position_win_rate=float(winrate.split("/")[1][:-1])
 				else:
 					next_position_win_rate=float(winrate.split("%")[0])
-				computer_move=one_move.get('CBM')
+				computer_move=node_get(one_move,'CBM')
 				if player_move==computer_move:
 					# in case the computer best move is the actual game move then:
 					# 1/ normally delta=0
@@ -1607,12 +1709,12 @@ class DualView(Toplevel):
 			#delta for monte carlo win rate
 			try:
 				next_move=get_node(self.gameroot,m+1)
-				winrate=next_move.get('MCWR')
+				winrate=node_get(next_move,'MCWR')
 				if player_color in ('w',"W"):
 					next_position_win_rate=float(winrate.split("/")[1][:-1])
 				else:
 					next_position_win_rate=float(winrate.split("%")[0])
-				computer_move=one_move.get('CBM')
+				computer_move=node_get(one_move,'CBM')
 				if player_move==computer_move:
 					current_position_win_rate=next_position_win_rate
 					one_data['monte_carlo_win_rate']=next_position_win_rate
@@ -1624,12 +1726,12 @@ class DualView(Toplevel):
 			#delta for value network win rate
 			try:
 				next_move=get_node(self.gameroot,m+1)
-				winrate=next_move.get('VNWR')
+				winrate=node_get(next_move,'VNWR')
 				if player_color in ('w',"W"):
 					next_position_win_rate=float(winrate.split("/")[1][:-1])
 				else:
 					next_position_win_rate=float(winrate.split("%")[0])
-				computer_move=one_move.get('CBM')
+				computer_move=node_get(one_move,'CBM')
 				if player_move==computer_move:
 					current_position_win_rate=next_position_win_rate
 					one_data['value_network_win_rate']=next_position_win_rate
@@ -1650,9 +1752,38 @@ class DualView(Toplevel):
 		self.add_popup(new_popup)
 		
 	def open_table(self,event=None):
-		new_popup=Table(self,self.gameroot,self.current_move,self.goban2.grid,self.goban2.markup)
-		self.add_popup(new_popup)
-	
+		# Variant A: popup
+		#   new_popup=Table(self,self.gameroot,self.current_move,self.goban2.grid,self.goban2.markup)
+		#   self.add_popup(new_popup)
+		#
+		# Variant B: widget
+		# We should (1) hide comment, (2) show table (widget), (3) re-set button to close table
+		self.comment_box2.grid_remove()
+
+		bg=self.cget("background")
+
+		# TODO: May be this should be moved to initialize, but need a solution to prevent blinking when greed() and greed_remove() instantly
+		if self.table_frame == None:
+			self.table_frame=Frame(self.lists_frame,background=bg)
+			self.table_frame.grid(column=1,row=2,sticky=N+W, padx=10, pady=10)
+			self.table_widget = TableWidget(self.table_frame,self,self.gameroot,self.current_move,self.goban2.grid,self.goban2.markup)
+		else:
+			# It was created and hidden already
+			self.table_frame.grid()
+
+		self.table_button["text"] = _("Comment")
+		self.table_button["command"] = self.close_table
+
+
+
+	def close_table(self,event=None):
+		# We should (1) close table, (2) show comments, (3) re-set button to open table
+		self.table_frame.grid_remove()
+		self.comment_box2.grid()
+
+		self.table_button["text"] = _("Table")
+		self.table_button["command"] = self.open_table
+
 	def hide_territories(self,event=None):
 		self.goban1.display(self.current_grid,self.current_markup)
 	
@@ -1715,15 +1846,14 @@ class DualView(Toplevel):
 		
 		self.territories=[[],[]]
 		if m>0:
-			the_move=one_move
-			if one_move.has_property("TB"):
-				self.territories[0]=one_move.get("TB")
-			if one_move.has_property("TW"):
-				self.territories[1]=one_move.get("TW")
+			if node_has(one_move,"TB"):
+				self.territories[0]=node_get(one_move,"TB")
+			if node_has(one_move,"TW"):
+				self.territories[1]=node_get(one_move,"TW")
 		if self.territories!=[[],[]]:
-			self.territory_button.grid()
+			self.territory_button.config(state=NORMAL)
 		else:
-			self.territory_button.grid_remove()
+			self.territory_button.config(state=DISABLED)
 		
 		#indicating last play with delta
 		
@@ -1731,8 +1861,8 @@ class DualView(Toplevel):
 		self.comment_box2.delete(1.0, END)
 		if m>=0:
 			left_comments=get_position_comments(self.current_move,self.gameroot)
-			if get_node(self.gameroot,m+1).has_property("C"):
-				left_comments+="\n\n==========\n"+get_node(self.gameroot,m+1).get("C")
+			if node_has(get_node(self.gameroot,m+1),"C"):
+				left_comments+="\n\n==========\n"+node_get(get_node(self.gameroot,m+1),"C")
 			self.game_comments=left_comments
 			self.comment_box2.insert(END,self.game_comments)
 			
@@ -1783,7 +1913,7 @@ class DualView(Toplevel):
 			log("no alternative move")
 			goban1.display(grid1,markup1)
 			goban2.display(grid2,markup2)
-			self.table_button.config(state='disabled')
+			#self.table_button.config(state='disabled')
 			return
 		else:
 			self.table_button.config(state='normal')
@@ -1798,15 +1928,15 @@ class DualView(Toplevel):
 			else: c=2
 			black_prob=None
 			white_prob=None
-			if one_alternative.has_property("BWWR") or one_alternative.has_property("VNWR") or one_alternative.has_property("MCWR"):
-				if one_alternative.has_property("BWWR"):
-					black_prob=float(one_alternative.get("BWWR").split("%")[0])
+			if node_has(one_alternative,"BWWR") or node_has(one_alternative,"VNWR") or node_has(one_alternative,"MCWR"):
+				if node_has(one_alternative,"BWWR"):
+					black_prob=float(node_get(one_alternative,"BWWR").split("%")[0])
 					white_prob=100-black_prob
-				elif one_alternative.has_property("VNWR"):
-					black_prob=float(one_alternative.get("VNWR").split("%")[0])
+				elif node_has(one_alternative,"VNWR"):
+					black_prob=float(node_get(one_alternative,"VNWR").split("%")[0])
 					white_prob=100-black_prob
-				elif one_alternative.has_property("MCWR"):
-					black_prob=float(one_alternative.get("MCWR").split("%")[0])
+				elif node_has(one_alternative,"MCWR"):
+					black_prob=float(node_get(one_alternative,"MCWR").split("%")[0])
 					white_prob=100-black_prob
 				
 				if c==1:
@@ -1822,7 +1952,14 @@ class DualView(Toplevel):
 							displaycolor="red"
 					elif self.variation_color_mode=="blue_for_better":
 						try:
-							real_game_prob=float(the_move[0][0].get("BWR")[:-1])
+							if node_has(parent[0][0],"BWWR"):
+								real_game_prob=float(node_get(parent[0][0],"BWWR").split("%")[0])
+							elif node_has(parent[0][0],"VNWR"):
+								real_game_prob=float(node_get(parent[0][0],"VNWR").split("%")[0])
+							elif node_has(parent[0][0],"MCWR"):
+								real_game_prob=float(node_get(parent[0][0],"MCWR").split("%")[0])
+							else:
+								raise Exception()
 							if real_game_prob<black_prob:
 								displaycolor="blue"
 							elif real_game_prob>black_prob:
@@ -1842,7 +1979,14 @@ class DualView(Toplevel):
 							displaycolor="red"
 					elif self.variation_color_mode=="blue_for_better":
 						try:
-							real_game_prob=float(the_move[0][0].get("WWR")[:-1])
+							if node_has(parent[0][0],"BWWR"):
+								real_game_prob=100-float(node_get(parent[0][0],"BWWR").split("%")[0])
+							elif node_has(parent[0][0],"VNWR"):
+								real_game_prob=100-float(node_get(parent[0][0],"VNWR").split("%")[0])
+							elif node_has(parent[0][0],"MCWR"):
+								real_game_prob=100-float(node_get(parent[0][0],"MCWR").split("%")[0])
+							else:
+								raise Exception()
 							if real_game_prob<white_prob:
 								displaycolor="blue"
 							elif real_game_prob>white_prob:
@@ -1851,8 +1995,8 @@ class DualView(Toplevel):
 							pass	
 			
 			comments=get_variation_comments(one_alternative)
-			if one_alternative.has_property("C"):
-				comments+=one_alternative.get("C")
+			if node_has(one_alternative,"C"):
+				comments+=node_get(one_alternative,"C")
 
 			if ij==real_game_ij: #in case the variation first move is the same as the game actual move, keep the label in black
 				letter_color="black"
@@ -1884,7 +2028,7 @@ class DualView(Toplevel):
 	def open_move(self):
 		log("Opening move",self.current_move)
 		
-		new_popup=OpenMove(self,self.current_move,self.dim,self.sgf,self.goban_size)
+		new_popup=OpenMove(self,self.current_move,self.dim,self.sgf)
 		new_popup.goban.mesh=self.goban1.mesh
 		new_popup.goban.wood=self.goban1.wood
 		new_popup.goban.black_stones=self.goban1.black_stones_style
@@ -1923,15 +2067,11 @@ class DualView(Toplevel):
 				
 				log("Updating data for charts")
 				self.data_for_chart=self.prepare_data_for_chart()
-				if not self.charts_button:
-					#there was no chart up to this point
-					for data in self.data_for_chart:
-						if data!=None:
-							log("Creating the chart button")
-							self.charts_button=Button(self, text=_('Graphs'))
-							self.charts_button.bind('<Button-1>', self.show_graphs)
-							self.charts_button.grid(column=3,row=2,sticky=E)
-							break
+				for data in self.data_for_chart:
+					if data!=None:
+						# there was no chart up to this point
+						self.charts_button.configure( state = NORMAL )
+						break
 				
 				for popup in self.popups:
 					if isinstance(popup,OpenChart):
@@ -1940,26 +2080,21 @@ class DualView(Toplevel):
 						popup.data=self.data_for_chart
 						popup.initialize()
 						popup.display()
+				log("Updating data for table")
+				try:
+					self.table_widget.gameroot=self.gameroot
+				except:
+					pass
+				
 		except:
 			pass
 		
 		self.after(period*1000,self.update_from_file)
-		
+
 	def initialize(self):
 
-		self.realgamedeepness=5
-		try:
-			self.realgamedeepness=int(Config.get("Review", "RealGameSequenceDeepness"))
-		except:
-			Config.set("Review", "RealGameSequenceDeepness",self.realgamedeepness)
-			Config.write(open(config_file,"w"))
-		
-		self.maxvariations=10
-		try:
-			self.maxvariations=int(Config.get("Review", "MaxVariations"))
-		except:
-			Config.set("Review", "MaxVariations",self.maxvariations)
-			Config.write(open(config_file,"w"))
+		self.realgamedeepness=grp_config.getint("Review", "RealGameSequenceDeepness")
+		self.maxvariations=grp_config.getint("Review", "MaxVariations")
 		
 		self.sgf = open_sgf(self.filename)
 
@@ -1977,123 +2112,116 @@ class DualView(Toplevel):
 		self.protocol("WM_DELETE_WINDOW", self.close)
 		
 		self.popups=[]
+		self.data_for_chart=self.prepare_data_for_chart()
 		
 		bg=self.cget("background")
 		#self.configure(background=bg)
 		
-		Label(self,text='   ',background=bg).grid(column=0,row=0)
+		# Such paned containers
+		central_frame = PanedWindow(self, orient=HORIZONTAL,relief=SUNKEN)
+		gobans_frame = PanedWindow(central_frame,relief=SUNKEN, orient=HORIZONTAL) #one paned frame for gobans, so that they resize at the same ratio
 		
-		buttons_bar=Frame(self,background=bg)
-		buttons_bar.grid(column=1,row=1,columnspan=3)
-		
-		first_move_button=Button(buttons_bar, text='|<< ',command=self.first_move)
-		first_move_button.grid(column=8,row=1)
-		
-		prev_10_moves_button=Button(buttons_bar, text=' << ',command=self.prev_10_move)
-		prev_10_moves_button.grid(column=9,row=1)
-		
-		prev_button=Button(buttons_bar, text=' <  ',command=self.prev_move)
-		prev_button.grid(column=10,row=1)
-		
-		Label(buttons_bar,text='          ',background=bg).grid(column=19,row=1)
-		
-		self.move_number=Label(buttons_bar,text='   ',background=bg)
-		self.move_number.grid(column=20,row=1)
+		# Such frames
+		self.buttons_bar2=Frame(self)
+		self.lists_frame=Frame(central_frame,relief=SUNKEN)
+		self.table_frame = None
 		
 
+		# Such widgets for main window
 		
-		Label(buttons_bar,text='          ',background=bg).grid(column=29,row=1)
-		
-		next_button=Button(buttons_bar, text='  > ',command=self.next_move)
-		next_button.grid(column=30,row=1)
-		
-		next_10_moves_button=Button(buttons_bar, text=' >> ',command=self.next_10_move)
-		next_10_moves_button.grid(column=31,row=1)
-		
-		final_move_button=Button(buttons_bar, text=' >>|',command=self.final_move)
-		final_move_button.grid(column=32,row=1)
-		
-		buttons_bar2=Frame(self,background=bg)
-		buttons_bar2.grid(column=1,row=2,sticky=W)
-		
-		open_button=Button(buttons_bar2, text=_('Open position'),command=self.open_move)
-		open_button.grid(column=1,row=1)
-		
-		self.territory_button=Button(buttons_bar2, text=_('Show territories'))
-		self.territory_button.grid(column=2,row=1)
-		self.territory_button.bind('<Button-1>', self.show_territories)
-		self.territory_button.bind('<ButtonRelease-1>', self.hide_territories)
-		
-		self.data_for_chart=self.prepare_data_for_chart()
-		self.charts_button=None
-		for data in self.data_for_chart:
-			if data!=None:
-				self.charts_button=Button(self, text=_('Graphs'))
-				self.charts_button.bind('<Button-1>', self.show_graphs)
-				self.charts_button.grid(column=3,row=2,sticky=E)
-				break
-		
-		self.bind('<Left>', self.prev_move)
-		self.bind('<Right>', self.next_move)
-
-		#Label(app,background=bg).grid(column=1,row=2)
-
-		row=10
-
-		#Label(self,background=bg).grid(column=1,row=row-1)
-
-		#self.goban1 = Canvas(self, width=10, height=10,bg=bg,bd=0, borderwidth=0)
-		self.goban1 = Goban(self.dim,master=self, width=10, height=10,bg=bg,bd=0, borderwidth=0)
-		
-
-		
-		self.goban1.grid(column=1,row=row,sticky=W+E+N+S)
-		Label(self, text='            ',background=bg).grid(column=2,row=row)
-		#self.goban2 = Canvas(self, width=10, height=10,bg=bg,bd=0, borderwidth=0)
-		self.goban2 = Goban(self.dim, master=self, width=10, height=10,bg=bg,bd=0, borderwidth=0)
+		left_display_factor=grp_config.getfloat("Review", "LeftGobanRatio")
+		right_display_factor=grp_config.getfloat("Review", "RightGobanRatio")
+		screen_width = self.parent.winfo_screenwidth()
+		screen_height = self.parent.winfo_screenheight()
+		self.left_goban_size=min(left_display_factor*screen_width,left_display_factor*screen_height)
+		self.right_goban_size=min(right_display_factor*screen_width,right_display_factor*screen_height)
+		self.goban1 = Goban(self.dim,self.left_goban_size,master=gobans_frame,relief=SUNKEN,bd=2) #bg
+		self.goban2 = Goban(self.dim,self.right_goban_size,master=gobans_frame,relief=SUNKEN,bd=2)
 		self.goban2.mesh=self.goban1.mesh
 		self.goban2.wood=self.goban1.wood
-		
 		self.goban2.black_stones_style=self.goban1.black_stones_style
 		self.goban2.white_stones_style=self.goban1.white_stones_style
+		self.goban1.space=self.left_goban_size/(self.dim+1+1+1)
+		self.goban2.space=self.right_goban_size/(self.dim+1+1+1)
+		self.status_bar=Label(self,text='',anchor=W,justify=LEFT)
+
+		# Such widgets for the buttons_bar - game navigation
+		first_move_button=Button(self.buttons_bar2, text='|<< ',command=self.first_move)
+		prev_10_moves_button=Button(self.buttons_bar2, text=' << ',command=self.prev_10_move)
+		prev_button=Button(self.buttons_bar2, text=' <  ',command=self.prev_move)
+		self.move_number=Label(self.buttons_bar2,text='   ',background=bg,width=9)
+		next_button=Button(self.buttons_bar2, text='  > ',command=self.next_move)
+		next_10_moves_button=Button(self.buttons_bar2, text=' >> ',command=self.next_10_move)
+		final_move_button=Button(self.buttons_bar2, text=' >>|',command=self.final_move)
 		
-		#self.goban2.black_stones=self.goban1.black_stones
-		#self.goban2.white_stones=self.goban1.white_stones
-		self.goban2.grid(column=3,row=row,sticky=W+E+N+S)
+		# Such widgets for the buttons_bar2 - commands and extra windows
+		open_button=Button(self.buttons_bar2, text=_('Open position'),command=self.open_move)
+		self.territory_button=Button(self.buttons_bar2, text=_('Show territories'))
+		self.table_button=Button(self.buttons_bar2,text=_("Table"),command=self.open_table)
+		self.charts_button=Button(self.buttons_bar2, text=_('Graphs'),state=DISABLED)
+
+		for data in self.data_for_chart:
+			if data!=None:
+				self.charts_button.configure( state = NORMAL )
+				break
 		
-		self.grid_rowconfigure(row, weight=1)
-		self.grid_columnconfigure(1, weight=1)
-		self.grid_columnconfigure(3, weight=1)
-		
-		self.goban1.space=self.goban_size/(self.dim+1+1)
-		self.goban2.space=self.goban_size/(self.dim+1+1)
-		
-		self.bind('<Control-q>', self.save_left_as_png)
-		self.bind('<Control-w>', self.save_right_as_png)
-		
-		Label(self,text='   ',background=bg).grid(column=4,row=row+1)
-		
+		# Such widgets for the rightmost list frame
 		police = tkFont.nametofont("TkFixedFont")
 		lpix = police.measure("a")
 		self.lpix=lpix
-		#self.comment_box1=ScrolledText(self,font=police,wrap="word",width=int(self.goban_size/lpix-2),height=5,foreground='black')
+		right_panel_ratio=grp_config.getfloat("Review", "RightPanelRatio")
+		right_panel_width=right_panel_ratio*screen_width
+		#self.comment_lines = int(right_panel_width / police.metrics('linespace') - 2) #no need to give a vertical height
+		self.comment_chars = int(right_panel_width/lpix)
+		#self.comment_box2=ScrolledText(self.lists_frame,font=police,wrap="word",height=self.comment_lines,width=self.comment_chars,foreground='black')
+		self.comment_box2=ScrolledText(self.lists_frame,font=police,wrap="word",width=self.comment_chars,foreground='black')
 		
-		self.table_button=Button(self,text=_("Table"),command=self.open_table)
-		self.table_button.grid(column=2,row=row,sticky=S)
+		#Place widgets in button_bar
+		first_move_button.grid(column=1,row=1)
+		prev_10_moves_button.grid(column=2,row=1)
+		prev_button.grid(column=3,row=1)
+		self.move_number.grid(column=5,row=1)
+		next_button.grid(column=7,row=1)
+		next_10_moves_button.grid(column=8,row=1)
+		final_move_button.grid(column=9,row=1)
 		
-		self.comment_box2=ScrolledText(self,font=police,wrap="word",width=int(2*self.goban_size/lpix-2),height=7,foreground='black')
-		self.comment_box2.grid(column=1, columnspan=3,row=row+4,sticky=W+E)
+		#spacer to separate left and right groups of button
+		Label(self.buttons_bar2,text='').grid(column=50,row=1,sticky=W+E)
+		self.buttons_bar2.columnconfigure(50, weight=1)
 		
-		self.status_bar=Label(self,text='',background=bg)
-		self.status_bar.grid(column=1,row=row+5,sticky=W,columnspan=3)
+		#Place widgets in command bar
+		open_button.grid(column=100,row=1)
+		self.table_button.grid(column=101,row=1)
+		self.charts_button.grid(column=102,row=1)
+		self.territory_button.grid(column=103,row=1)
 		
-		#Label(self,text='   ',background=bg).grid(column=4,row=row+6)
+		#Place widgets in lists frame
+		self.comment_box2.grid(column=1,row=2,sticky=N+S+E+W, padx=2, pady=2)
+		self.lists_frame.grid_columnconfigure(1, weight=1)
+		self.lists_frame.grid_rowconfigure(2, weight=1)
+
+		#Place widgets in main frame
+		self.buttons_bar2.pack(fill=X)
 		
-		goban.show_variation=self.show_variation
 		
-		self.goban1.bind("<Enter>",lambda e: self.set_status(_("<Ctrl+Q> to save the goban as an image.")))
-		self.goban2.bind("<Enter>",lambda e: self.set_status(_("<Ctrl+W> to save the goban as an image.")))
+		central_frame.pack(fill=BOTH, expand=1)	
+		gobans_frame.add(self.goban1, stretch="always") #https://mail.python.org/pipermail/tkinter-discuss/2012-May/003146.html
+		gobans_frame.add(self.goban2, stretch="always")
 		
+		central_frame.add(gobans_frame, stretch="always")
+		central_frame.add(self.lists_frame, stretch="always")
+		
+		self.status_bar.pack(fill=X)
+		
+		# Such keybindings
+		self.territory_button.bind('<Button-1>', self.show_territories)
+		self.territory_button.bind('<ButtonRelease-1>', self.hide_territories)
+		self.bind('<Control-q>', self.save_left_as_png)
+		self.bind('<Control-w>', self.save_right_as_png)
+		self.bind('<Left>', self.prev_move)
+		self.bind('<Right>', self.next_move)
+		
+		# Such tooltips
 		first_move_button.bind("<Enter>",lambda e: self.set_status(_("Go to first move.")))
 		prev_10_moves_button.bind("<Enter>",lambda e: self.set_status(_("Go back 10 moves.")))
 		prev_button.bind("<Enter>",lambda e: self.set_status(_("Go back one move. Shortcut: keyboard left key.")))
@@ -2101,35 +2229,60 @@ class DualView(Toplevel):
 		next_button.bind("<Enter>",lambda e: self.set_status(_("Go forward one move. Shortcut: keyboard right key.")))
 		next_10_moves_button.bind("<Enter>",lambda e: self.set_status(_("Go forward 10 moves.")))
 		final_move_button.bind("<Enter>",lambda e: self.set_status(_("Go to final move.")))
+		self.charts_button.bind('<Button-1>', self.show_graphs)
 		self.territory_button.bind("<Enter>",lambda e: self.set_status(_("Keep pressed to show territories.")))
+		self.goban1.bind("<Enter>",lambda e: self.set_status(_("<Ctrl+Q> to save the goban as an image.")))
+		self.goban2.bind("<Enter>",lambda e: self.set_status(_("<Ctrl+W> to save the goban as an image.")))
 		for button in [first_move_button,prev_10_moves_button,prev_button,open_button,next_button,next_10_moves_button,final_move_button,self.territory_button,self.goban1,self.goban2]:
 			button.bind("<Leave>",lambda e: self.clear_status())
 		
-		self.goban1.bind("<Configure>",self.redraw)
-		self.after(10000,self.update_from_file)
-	
-	def redraw(self, event):
-		new_size=min(event.width,event.height)
-		new_space=new_size/(self.dim+1+1)
-		self.goban1.space=new_space
-		self.goban2.space=new_space
+		self.goban1.bind("<Configure>",self.redraw_left)
+		self.goban2.bind("<Configure>",self.redraw_right)
+		self.comment_box2.bind("<Configure>",self.redraw_panel)
 		
+		self.after(10000,self.update_from_file)
+		goban.show_variation=self.show_variation
+		
+
+	def redraw_left(self, event):
+		new_size=min(event.width,event.height)
+		screen_width = self.parent.winfo_screenwidth()
+		screen_height = self.parent.winfo_screenheight()
+		ratio=1.0*new_size/min(screen_width,screen_height)
+		grp_config.set("Review", "LeftGobanRatio",ratio)
+		new_space=new_size/(self.dim+1+1+1)
+		if new_space==self.goban1.space:
+			return
+		self.goban1.space=new_space
 		new_anchor_x=(event.width-new_size)/2
 		self.goban1.anchor_x=new_anchor_x
-		self.goban2.anchor_x=new_anchor_x
-		
 		new_anchor_y=(event.height-new_size)/2
 		self.goban1.anchor_y=new_anchor_y
-		self.goban2.anchor_y=new_anchor_y
-		
 		self.goban1.reset()
+		
+
+	def redraw_right(self, event):
+		new_size=min(event.width,event.height)
+		screen_width = self.parent.winfo_screenwidth()
+		screen_height = self.parent.winfo_screenheight()
+		ratio=1.0*new_size/min(screen_width,screen_height)
+		grp_config.set("Review", "RightGobanRatio",ratio)
+		new_space=new_size/(self.dim+1+1+1)
+		if new_space==self.goban2.space:
+			return
+		self.goban2.space=new_space
+		new_anchor_x=(event.width-new_size)/2
+		self.goban2.anchor_x=new_anchor_x
+		new_anchor_y=(event.height-new_size)/2
+		self.goban2.anchor_y=new_anchor_y
 		self.goban2.reset()
 		
-		
-		if sys.platform!="darwin":
-			#https://github.com/pnprog/goreviewpartner/issues/7
-			self.comment_box2.config(width=int(event.width/self.lpix-10))
-		
+	def redraw_panel(self, event):
+		new_size=event.width
+		screen_width = self.parent.winfo_screenwidth()
+		ratio=1.0*new_size/screen_width
+		grp_config.set("Review", "RightPanelRatio",ratio)
+
 	def set_status(self,msg):
 		self.status_bar.config(text=msg)
 		
@@ -2148,11 +2301,8 @@ class DualView(Toplevel):
 	
 from gomill import sgf, sgf_moves
 import goban
-#goban.fuzzy=float(Config.get("Review", "FuzzyStonePlacement"))
 
 if __name__ == "__main__":
-	Config = ConfigParser.ConfigParser()
-	Config.read(config_file)
 	if len(sys.argv)==1:
 		temp_root = Tk()
 		filename = open_rsgf_file(parent=temp_root)
@@ -2163,16 +2313,6 @@ if __name__ == "__main__":
 	else:
 		filename=sys.argv[1]
 	top = Application()
-	display_factor=.5
-	try:
-		display_factor=float(Config.get("Review", "GobanScreenRatio"))
-	except:
-		Config.set("Review", "GobanScreenRatio",display_factor)
-		Config.write(open(config_file,"w"))
-	screen_width = top.winfo_screenwidth()
-	screen_height = top.winfo_screenheight()
-	width=int(display_factor*screen_width)
-	height=int(display_factor*screen_height)
-	popup=DualView(top,filename,min(width,height))
+	popup=DualView(top,filename)
 	top.add_popup(popup)
 	top.mainloop()
