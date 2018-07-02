@@ -113,7 +113,6 @@ class Goban(Canvas):
 	def __init__(self,dim,size,**kwargs):
 		self.space=size/(dim+1+1+1)
 		self.dim=dim
-		self.space=space
 		#self.wood_color=(214,174,114) #same as gogui
 		self.wood_color=(255,255,255)
 		if "width" not in kwargs:

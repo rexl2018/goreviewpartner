@@ -1384,11 +1384,7 @@ class DualView(Toplevel):
 		Toplevel.__init__(self,parent)
 		self.parent=parent
 		self.filename=filename
-		self.goban_size=goban_size
-
 		self.leaving_var = True
-		
-
 		
 		global goban
 		goban.fuzzy=grp_config.getfloat("Review", "FuzzyStonePlacement")
