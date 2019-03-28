@@ -2,16 +2,23 @@
 from __future__ import unicode_literals
 
 import sys, os
-print "STDIN encoding:",sys.stdin.encoding
-print "STDOUT encoding:",sys.stdout.encoding
-print "STDERR encoding:",sys.stderr.encoding
-print "File system encoding:",sys.getfilesystemencoding()
+
+if (sys.version_info > (3, 0)):
+	print("GoReviewPartner needs Python version 2 (e.g. 2.7.9) to run.")
+	print("GoReviewPartner cannot work with verions 3 of Python at the moment.")
+	print("Sorry about that :/")
+	input()
+	exit()
+
+print("STDIN encoding:",sys.stdin.encoding)
+print("STDOUT encoding:",sys.stdout.encoding)
+print("STDERR encoding:",sys.stderr.encoding)
+print("File system encoding:",sys.getfilesystemencoding())
 
 try:
 	from Tkinter import * 
-except Exception, e:
-	print "Could not import the Tkinter librairy, please double check it is installed:"
-	print unicode(e)
+except Exception:
+	print("Could not import the Tkinter librairy, please double check it is installed.")
 	raw_input()
 	sys.exit()
 
@@ -22,6 +29,7 @@ from toolbox import *
 from toolbox import _
 from live_analysis import LiveAnalysisLauncher
 from r2sgf import rsgf2sgf
+from r2csv import rsgf2csv
 
 class Main(Toplevel):
 	def __init__(self,parent):
@@ -53,6 +61,9 @@ class Main(Toplevel):
 		r2sgf_bouton=Button(self.control_frame, text=_("Convert RSGF file to SGF file"), command=self.r2sgf)
 		r2sgf_bouton.pack(fill=X,padx=5, pady=5)
 		
+		r2csv_bouton=Button(self.control_frame, text=_("Convert RSGF file to CSV file"), command=self.r2csv)
+		r2csv_bouton.pack(fill=X,padx=5, pady=5)
+		
 		bouton=Button(self.control_frame, text=_("Settings"), command=self.launch_settings)
 		bouton.pack(fill=X,padx=5, pady=5)
 
@@ -73,6 +84,14 @@ class Main(Toplevel):
 			return
 		rsgf2sgf(filename)
 		show_info(_("The file %s has been converted to %s")%(os.path.basename(filename),os.path.basename(filename)+".sgf"),parent=self.parent)
+
+	def r2csv(self):
+		filename = open_rsgf_file(parent=self.parent)
+		if not filename:
+			return
+		rsgf2csv(filename)
+		show_info(_("The file %s has been converted to %s")%(os.path.basename(filename),os.path.basename(filename)+".csv"),parent=self.parent)
+
 	def close(self):
 		for popup in self.popups[:]:
 			popup.close()
@@ -87,12 +106,12 @@ class Main(Toplevel):
 		
 		log("filename:",filename)
 		
-		new_popup=RangeSelector(self.parent,filename,bots=get_available("AnalysisBot"))
+		new_popup=RangeSelector(self.parent,filename,bots=get_available())
 
 		self.parent.add_popup(new_popup)
 
 	def download_sgf_for_review(self):	
-		new_popup=DownloadFromURL(self.parent,bots=get_available("AnalysisBot"))
+		new_popup=DownloadFromURL(self.parent,bots=get_available())
 		self.parent.add_popup(new_popup)
 
 	def launch_live_analysis(self):		
@@ -114,7 +133,7 @@ class Main(Toplevel):
 
 	def refresh(self):
 		log("refreshing")
-		if len(get_available("AnalysisBot"))==0:
+		if len(get_available())==0:
 			self.analysis_bouton.config(state='disabled')
 			self.download_bouton.config(state='disabled')
 			self.live_bouton.config(state='disabled')
@@ -123,15 +142,43 @@ class Main(Toplevel):
 			self.download_bouton.config(state='normal')
 			self.live_bouton.config(state='normal')
 		
-		if len(get_available("LiveAnalysisBot"))==0:
+		if len(get_available())==0:
 			self.live_bouton.config(state='disabled')
 		else:
 			self.live_bouton.config(state='normal')
 
 
-app = Application()
-popup=Main(app)
-popup.refresh()
-app.add_popup(popup)
+if __name__ == "__main__":
+	app = Application()
+	if len(sys.argv)==1:
+		popup=Main(app)
+		popup.refresh()
+		app.add_popup(popup)
+		app.mainloop()
+		
+	else:
+		
+		opened=0
+		for filename in argv[1:]:
+			log(filename,"???")
+			extension=filename[-4:].lower()
+			log("extension",extension)
+			if extension=="rsgf":
+				opened+=1
+				log("Opening",filename)
+				popup=dual_view.DualView(app,filename)
+				app.add_popup(popup)
+			elif extension==".sgf":
+				log("Opening",filename)
+				popup=RangeSelector(app,filename,bots=get_available())
+				app.add_popup(popup)
+				opened+=1
 
-app.mainloop()
+		if not opened:
+			popup=Main(app)
+			popup.refresh()
+			app.add_popup(popup)
+		
+
+	app.mainloop()
+

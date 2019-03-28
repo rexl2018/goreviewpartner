@@ -31,6 +31,10 @@ msgstr "설정"
 msgid "The file %s has been converted to %s"
 msgstr "%s 파일을 %s 파일로 변환 완료"
 
+#1.9
+msgid "Convert RSGF file to CSV file"
+msgstr "파일 변환(RSGF→CSV)"
+
 ############## Analysis setting
 #2.1
 msgid "Bot to use for analysis:"
@@ -70,7 +74,7 @@ msgstr "백만 분석"
 
 #2.10
 msgid "Confirm the value of komi"
-msgstr "덤 값"
+msgstr "덤 치수"
 
 #2.11
 msgid "Stop the analysis if the bot resigns"
@@ -86,7 +90,7 @@ msgstr "시작"
 
 #2.14
 msgid "Incorrect value for komi (%s), please double check."
-msgstr "덤 값 (%s) 오류, 다시 확인해 주세요."
+msgstr "덤 치수 (%s) 오류, 다시 확인해 주세요."
 
 #2.15
 msgid "Could not make sense of the moves range."
@@ -98,7 +102,7 @@ msgstr "한개 또는 이상의 착수번호 간격을 지정하세요 (예: \"1
 
 #2.17
 msgid "Error while reading komi value, please check:"
-msgstr "덤 값 읽기 실패, 다음을 확인해 주세요:"
+msgstr "덤 치수 읽기 실패, 다음을 확인해 주세요:"
 
 
 ############## SGF download
@@ -117,6 +121,22 @@ msgstr "해당 URL을 다운로드할 수 없습니다"
 #3.4
 msgid "Not a valid SGF file!"
 msgstr "SGF파일이 아닙니다!"
+
+#3.5
+msgid "This analysis will be performed on an already analysed SGF file."
+msgstr ""
+
+#3.6
+msgid "What to do with the existing variations?"
+msgstr ""
+
+#3.7
+msgid "Keep existing variations"
+msgstr ""
+
+#3.8
+msgid "Replace existing variations"
+msgstr ""
 
 ############## Analysis running ###
 #4.1
@@ -145,13 +165,6 @@ msgstr "닫는 중, 잠시 기다리세요..."
 
 
 ############## RSGF review
-#5.1
-msgid "Open position"
-msgstr "현위치에서 따로 놓아보기"
-
-#5.2
-msgid "Show territories"
-msgstr "영역(집) 보기"
 
 #5.3
 msgid "Graphs"
@@ -160,14 +173,8 @@ msgstr "그래프"
 #5.4
 msgid "Table"
 msgstr "표"
-
-#5.5
-msgid "Open this position onto a third goban to play out variations."
-msgstr "새 창을 열어 현상태에서 수읽기를 해 봅니다."
-
-#5.6
-msgid "Keep pressed to show territories."
-msgstr "영역(집)을 보려면 계속 누르고 있으세요."
+msgid "Comments"
+msgstr ""
 
 #5.7
 msgid "Go to first move."
@@ -196,6 +203,8 @@ msgstr "마지막 수로 이동."
 #5.13
 msgid "<Ctrl+Q> to save the goban as an image."
 msgstr "바둑판을 이미지로 저장하려면 <Ctrl+Q>를 누르세요."
+msgid "Use mouse middle click or wheel to undo move."
+msgstr ""
 
 #5.14
 msgid "<Ctrl+W> to save the goban as an image."
@@ -205,7 +214,41 @@ msgstr "바둑판을 이미지로 저장하려면 <Ctrl+W>를 누르세요."
 msgid "Use mouse wheel or keyboard up/down keys to display the sequence move by move."
 msgstr "착수 순서를 보려면 마우스 휠 또는 키보드 위/아래 키를 사용하세요."
 
+#5.16
+msgid "Actual game"
+msgstr ""
 
+#5.17
+msgid "Keep pressed to show map."
+msgstr ""
+
+#5.18
+msgid "Maps"
+msgstr ""
+
+#5.19
+msgid "Show"
+msgstr ""
+
+#5.20
+msgid "Territories"
+msgstr ""
+
+#5.21
+msgid "Influence"
+msgstr ""
+
+#5.22
+msgid "Heat map"
+msgstr ""
+
+#5.23
+msgid "Display"
+msgstr ""
+
+#5.24
+msgid "Not available"
+msgstr ""
 
 ############## Open position
 #6.1
@@ -224,33 +267,13 @@ msgstr "백으로 두기"
 msgid "Play as black"
 msgstr "흑으로 두기"
 
-#6.5
-msgid "Self play"
-msgstr "스스로 두기"
-
-#6.6
-msgid "Quick evaluation"
-msgstr "승부 예측"
-
 #6.7
 msgid "Undo last move. Shortcut: mouse middle button."
 msgstr "마지막 수 무르기. 단축키: 마우스 가운데 버튼."
 
 #6.8
-msgid "Select a bot."
+msgid "Select a bot"
 msgstr "인공지능을 선택하세요"
-
-#6.9
-msgid "Ask the bot to play one move."
-msgstr "인공지능에게 한수 두게 합니다."
-
-#6.10
-msgid "Ask the bot to play as White."
-msgstr "인공지능이 백으로 둡니다."
-
-#6.11
-msgid "Ask the bot to play as Black."
-msgstr "인공지능이 흑으로 둡니다."
 
 #6.12
 msgid "Let the bot take both sides and play against itself."
@@ -260,10 +283,6 @@ msgstr "인공지능이 혼자서 둡니다."
 msgid "Ask the bot for a quick evaluation"
 msgstr "인공지능에게 승부을 예상하게 합니다"
 
-#6.14
-msgid "Abort"
-msgstr "취소"
-
 #6.15
 msgid "White"
 msgstr "백"
@@ -272,6 +291,17 @@ msgstr "백"
 msgid "Black"
 msgstr "흑"
 
+#6.17
+msgid "Action"
+msgstr ""
+
+#6.18
+msgid "No bot"
+msgstr ""
+
+#6.19
+msgid "Do nothing"
+msgstr ""
 
 
 
@@ -395,10 +425,6 @@ msgstr "바둑돌 삐뚤게 표시하는 정도"
 msgid "Real game sequence deepness"
 msgstr "실제 두어진 수를 몇 수까지 표시"
 
-#8.11
-msgid "Goban/screen ratio"
-msgstr "화면높이 대비 바둑판의 크기 비율"
-
 #8.12
 msgid "Maximum number of variations to display during review"
 msgstr "검토하는 동안 표시될 최대 변화도의 수"
@@ -440,9 +466,6 @@ msgid "Letters"
 msgstr "레터(문자)로 표시"
 
 
-
-
-
 ############## Bots Settings
 #9.1
 msgid "Slow profile parameters"
@@ -466,27 +489,7 @@ msgstr "연결테스트"
 
 #9.6
 msgid "Fast profile parameters"
-msgstr "빠른 프로파일 설정"
-
-#9.7
-msgid "%s availability"
-msgstr "- 사용할 %s 프로파일 -"
-
-#9.8
-msgid "Static analysis"
-msgstr "일반 분석"
-
-#9.9
-msgid "Live analysis"
-msgstr "실시간 분석"
-
-#9.10
-msgid "Live analysis as black or white"
-msgstr "흑 또는 백으로 실시간 분석"
-
-#9.11
-msgid "When opening a position for manual play"
-msgstr "따로 놓아보기 할 때"
+msgstr "- 빠른 프로파일 설정 -"
 
 #9.12
 msgid "Maximum number of variations"
@@ -508,16 +511,6 @@ msgstr "느린 프로파일"
 msgid "Fast profile"
 msgstr "빠른 프로파일"
 
-#9.17
-msgid "Both profiles"
-msgstr "모든 프로파일"
-
-#9.18
-msgid "None"
-msgstr "선택 안함"
-
-
-
 ############## Data description and display
 #10.1
 msgid "Move %i"
@@ -534,7 +527,7 @@ msgstr "현재 흑이 둘 차례, 실제로 흑은 %s 에 두었음"
 #10.3
 msgid "For this position, %s would play: %s"
 #e.g. For this position, Leela would play: D16
-msgstr "이번 수에서 %s 라면 %s 에 두었을 것입니다"
+msgstr "이번 수에서 저(%s)라면 %s 에 두었을 것입니다"
 
 #10.4
 msgid "Black win probability:"
@@ -736,6 +729,10 @@ msgstr "이번 수를 패스합니다"
 msgid "Undo to previous move"
 msgstr "마지막 수를 무릅니다"
 
+#12.14
+msgid "Live game"
+msgstr ""
+
 ############## GTP terminal
 #13.1
 msgid "Send GTP command"
@@ -771,6 +768,9 @@ msgid "Information"
 msgstr "정보"
 
 ############## error messages
+
+msgid "Could not open the RSGF file: "
+msgstr ""
 
 msgid "Could not save the RSGF file: "
 msgstr "RSGF파일을 저장할 수 없습니다: "
@@ -826,6 +826,9 @@ msgstr "프로그램을 실행할 수 없음"
 msgid "Leela Zero is currently running the OpenCL SGEMM tuner. It may take several minutes until Leela Zero is ready."
 msgstr "릴라제로가 OpenCL SGEMM 튜닝중. 준비될 때까지 몇 분이 걸릴 수 있음."
 
+msgid "Ray is currently running the OpenCL SGEMM tuner. It may take several minutes until Ray is ready."
+msgstr "릴라제로가 OpenCL SGEMM 튜닝중. 준비될 때까지 몇 분이 걸릴 수 있음."
+
 msgid "The config.ini file does not contain %s entry for %s !"
 #e.g. The config.ini file does not contain TimePerMove entry for Leela !
 msgstr "config.ini 파일에 %s 항목(%s 용)이 없음!"
@@ -833,8 +836,3 @@ msgstr "config.ini 파일에 %s 항목(%s 용)이 없음!"
 msgid "The config.ini file %s entry for %s is empty!"
 #e.g. The config.ini file TimePerMove entry for Leela is empty!
 msgstr "config.ini 파일의 %s 항목(%s 용)이 비어있음!"
-
-msgid "The SGF file contains white handicap stones! %s cannot deal with that!"
-#e.g. The SGF file contains white handicap stones! Leela cannot deal with that!
-msgstr "SGF 파일이 백돌이 접바둑으로 깔려 있어서 %s 이(가) 처리할 수 없음!"
-

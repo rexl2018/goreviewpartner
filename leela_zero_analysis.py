@@ -3,20 +3,11 @@ from __future__ import unicode_literals
 
 from gtp import gtp
 import sys
-from gomill import sgf, sgf_moves
-from sys import exit,argv
 from Tkinter import *
-
 from time import sleep
-import os
 import threading
-import ttk
-
 from toolbox import *
 from toolbox import _
-
-import tkMessageBox
-
 
 class LeelaZeroAnalysis():
 	def run_analysis(self,current_move):
@@ -45,7 +36,7 @@ class LeelaZeroAnalysis():
 
 		position_evaluation=leela_zero.get_all_leela_zero_moves()
 		
-		if (answer.lower() in ["pass","resign"]):
+		if (answer in ["PASS","RESIGN"]):
 			leela_zero.undo()
 		else:
 			#let's make sure there is at least one variation available
@@ -76,7 +67,7 @@ class LeelaZeroAnalysis():
 				if len(new_position_evaluation['variations'])==0:
 					new_position_evaluation['variations'].append({'sequence':answer})
 				
-				if (answer.lower() not in ["pass","resign"]):
+				if (answer not in ["PASS","RESIGN"]):
 					#let's check the lenght of the new sequence
 					new_sequence=new_position_evaluation["variations"][0]["sequence"]
 					#adding this new sequence to the old sequence
@@ -99,8 +90,8 @@ class LeelaZeroAnalysis():
 			current_color=player_color	
 			first_variation_move=True
 			for one_deep_move in variation['sequence'].split(' '):
-				if one_deep_move.lower() in ["pass","resign"]:
-					log("Leaving the variation when encountering",one_deep_move.lower())
+				if one_deep_move in ["PASS","RESIGN"]:
+					log("Leaving the variation when encountering",one_deep_move)
 					break
 
 				i,j=gtp2ij(one_deep_move)
@@ -140,6 +131,26 @@ class LeelaZeroAnalysis():
 					current_color='w'
 		log("==== no more sequences =====")
 		
+		try:
+			max_reading_depth=position_evaluation['max reading depth']
+			node_set(one_move,"MRD",str(max_reading_depth))
+			average_reading_depth=position_evaluation['average reading depth']
+			node_set(one_move,"ARD",str(average_reading_depth))
+		except:
+			pass
+		
+		log("==== creating heat map =====")
+		raw_heat_map=leela_zero.get_heatmap()
+		heat_map=""
+		for i in range(self.size):
+			for j in range(self.size):
+				if raw_heat_map[i][j]>=0.01:#ignore values lower than 1% to avoid generating heavy RSGF file
+					heat_map+=ij2sgf([i, j])+str(round(raw_heat_map[i][j],2))+","
+		
+		if heat_map:
+			node_set(one_move,"HTM",heat_map[:-1]) #HTM: heat map
+		
+		
 		#one_move.add_comment_text(additional_comments)
 		return best_answer
 	
@@ -149,44 +160,37 @@ class LeelaZeroAnalysis():
 		self.time_per_move=0
 		return leela_zero
 
-def leela_zero_starting_procedure(sgf_g,profile="slow",silentfail=False):
-	if profile=="slow":
-		timepermove_entry="SlowTimePerMove"
-	elif profile=="fast":
-		timepermove_entry="FastTimePerMove"
+def leela_zero_starting_procedure(sgf_g,profile,silentfail=False):
 
 	leela_zero=bot_starting_procedure("LeelaZero","Leela Zero",Leela_Zero_gtp,sgf_g,profile,silentfail)
 	if not leela_zero:
 		return False
 	try:
-		time_per_move=grp_config.get("LeelaZero", timepermove_entry)
+		time_per_move=profile["timepermove"]
 		if time_per_move:
 			time_per_move=int(time_per_move)
 			if time_per_move>0:
 				log("Setting time per move")
 				leela_zero.set_time(main_time=0,byo_yomi_time=time_per_move,byo_yomi_stones=1)
-				#self.time_per_move=time_per_move #why is that needed???
 	except:
-		log("Wrong value for Leela thinking time:",grp_config.get("LeelaZero", timepermove_entry))
-		log("Erasing that value in the config file")
-		grp_config.set("LeelaZero",timepermove_entry,"")
-	
+		log("Wrong value for Leela Zero thinking time:",time_per_move)
+
 	return leela_zero
 
 
 
 class RunAnalysis(LeelaZeroAnalysis,RunAnalysisBase):
-	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile="slow",existing_variations="remove_everything"):
+	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile,existing_variations="remove_everything"):
 		RunAnalysisBase.__init__(self,parent,filename,move_range,intervals,variation,komi,profile,existing_variations)
 
 class LiveAnalysis(LeelaZeroAnalysis,LiveAnalysisBase):
-	def __init__(self,g,filename,profile="slow"):
+	def __init__(self,g,filename,profile):
 		LiveAnalysisBase.__init__(self,g,filename,profile)
 
 
 import ntpath
 import subprocess
-import threading, Queue
+import Queue
 
 class Position(dict):
 	def __init__(self):
@@ -197,6 +201,36 @@ class Variation(dict):
 
 class Leela_Zero_gtp(gtp):
 
+	def get_heatmap(self):
+		while not self.stderr_queue.empty():
+			self.stderr_queue.get()
+		self.write("heatmap average")
+		one_line=self.readline() #empty line
+		buff=[]
+		while len(buff)<self.size+2:
+			buff.append(self.stderr_queue.get())
+		buff.reverse()
+		number_coordinate=1
+		letters="ABCDEFGHJKLMNOPQRST"[:self.size]
+		pn=[["NA" for i in range(self.size)] for j in range(self.size)] #pn: policy network
+		pn_values=[]
+		for i in range(self.size+2):
+			one_line=buff[i].strip()
+			if "winrate" in one_line:
+				continue
+			if "pass" in one_line:
+				continue
+			one_line=one_line.strip()
+			one_line=[int(s) for s in one_line.split()]
+			new_values=[[letter_coordinate+str(number_coordinate),int(value)/1000.] for letter_coordinate,value in zip(letters,one_line)]
+			for nv in new_values:
+				pn_values.append(nv)
+			number_coordinate+=1
+
+		for coordinates,value in pn_values:
+			i,j=gtp2ij(coordinates)
+			pn[i][j]=value
+		return pn
 
 	def quick_evaluation(self,color):
 		if color==2:
@@ -299,27 +333,6 @@ class Leela_Zero_gtp(gtp):
 		except:
 			raise GRPException("GRPException in Get_leela_zero_final_score()")
 
-	def get_leela_zero_influence(self):
-		self.write("influence")
-		one_line=self.readline() #empty line
-		buff=[]
-		while self.stderr_queue.empty():
-			sleep(.1)
-		while not self.stderr_queue.empty():
-			while not self.stderr_queue.empty():
-				buff.append(self.stderr_queue.get())
-			sleep(.1)
-		buff.reverse()
-		#log(buff)
-		influence=[]
-		for i in range(self.size):
-			one_line=buff[i].strip()
-			one_line=one_line.replace(".","0").replace("x","1").replace("o","2").replace("O","0").replace("X","0").replace("w","1").replace("b","2")
-			one_line=[int(s) for s in one_line.split(" ")]
-			influence.append(one_line)
-		
-		return influence
-
 	def get_all_leela_zero_moves(self):
 		buff=[]
 		
@@ -335,44 +348,46 @@ class Leela_Zero_gtp(gtp):
 		
 		for err_line in buff:
 			#log(err_line)
-			if " ->" in err_line:
-				if err_line[0]==" ":
-					#log(err_line)
-					variation=Variation()
-					
-					one_answer=err_line.strip().split(" ")[0]
-					variation["first move"]=one_answer
-					
-					nodes=err_line.strip().split("(")[0].split("->")[1].replace(" ","")
-					variation["playouts"]=nodes
-					
-					value_network=err_line.split("(V:")[1].split('%')[0].strip()+"%"
-					variation["value network win rate"]=value_network #for Leela Zero, the value network is used as win rate
-					
-					policy_network=err_line.split("(N:")[1].split('%)')[0].strip()+"%"
-					variation["policy network value"]=policy_network
-					
-					sequence=err_line.split("PV: ")[1].strip()
-					variation["sequence"]=sequence
-					
-					#answers=[[one_answer,sequence,value_network,policy_network,nodes]]+answers
-					position_evaluation['variations']=[variation]+position_evaluation['variations']
+			try: #for comptability with Leela Zero dynamic komi
+				if "average depth," in err_line and "max depth" in err_line:
+					position_evaluation["average reading depth"]=float(err_line.split()[0])
+					position_evaluation["max reading depth"]=int(err_line.split()[3])
+				if " ->" in err_line:
+					if err_line[0]==" ":
+						#log(err_line)
+						variation=Variation()
+						
+						one_answer=err_line.strip().split(" ")[0]
+						variation["first move"]=one_answer
+						
+						nodes=err_line.strip().split("(")[0].split("->")[1].replace(" ","")
+						variation["playouts"]=nodes
+						
+						value_network=err_line.split("(V:")[1].split('%')[0].strip()+"%"
+						variation["value network win rate"]=value_network #for Leela Zero, the value network is used as win rate
+						
+						policy_network=err_line.split("(N:")[1].split('%)')[0].strip()+"%"
+						variation["policy network value"]=policy_network
+						
+						sequence=err_line.split("PV: ")[1].strip()
+						variation["sequence"]=sequence.upper()
+						
+						#answers=[[one_answer,sequence,value_network,policy_network,nodes]]+answers
+						position_evaluation['variations']=[variation]+position_evaluation['variations']
+			except:
+				pass
 
 		return position_evaluation
 
 from leela_analysis import LeelaSettings
 
 class LeelaZeroSettings(LeelaSettings):
-	def __init__(self,parent):
-		LeelaSettings.__init__(self,parent)
-		self.name="LeelaZero"
-		self.parent=parent
-		self.gtp=Leela_Zero_gtp
-		self.initialize()
-
+	def __init__(self,parent,bot="LeelaZero"):
+		LeelaSettings.__init__(self,parent,bot)
+		self.bot_gtp=Leela_Zero_gtp
 
 class LeelaZeroOpenMove(BotOpenMove):
-	def __init__(self,sgf_g,profile="slow"):
+	def __init__(self,sgf_g,profile):
 		BotOpenMove.__init__(self,sgf_g,profile)
 		self.name='Leela Zero'
 		self.my_starting_procedure=leela_zero_starting_procedure
@@ -388,54 +403,5 @@ LeelaZero['liveanalysis']=LiveAnalysis
 LeelaZero['runanalysis']=RunAnalysis
 LeelaZero['starting']=leela_zero_starting_procedure
 
-import getopt
 if __name__ == "__main__":
-	if len(argv)==1:
-		temp_root = Tk()
-		filename = open_sgf_file(parent=temp_root)
-		temp_root.destroy()
-		log(filename)
-		log("gamename:",filename[:-4])
-		if not filename:
-			sys.exit()
-		log("filename:",filename)
-		
-		top = Application()
-		bot=LeelaZero
-		
-		slowbot=bot
-		slowbot['profile']="slow"
-		fastbot=dict(bot)
-		fastbot['profile']="fast"
-		popup=RangeSelector(top,filename,bots=[slowbot, fastbot])
-		top.add_popup(popup)
-		top.mainloop()
-	else:
-		try:
-			parameters=getopt.getopt(argv[1:], '', ['no-gui','range=', 'color=', 'komi=',"variation=", "profil="])
-		except Exception, e:
-			show_error(unicode(e)+"\n"+usage)
-			sys.exit()
-		
-		if not parameters[1]:
-			show_error("SGF file missing\n"+usage)
-			sys.exit()
-		
-		app=None
-		batch=[]
-		
-		for filename in parameters[1]:
-			move_selection,intervals,variation,komi,nogui,profil=parse_command_line(filename,parameters[0])
-			filename2=".".join(filename.split(".")[:-1])+".rsgf"
-			if nogui:
-				popup=RunAnalysis("no-gui",[filename,filename2],move_selection,intervals,variation-1,komi,profil)
-				popup.terminate_bot()
-			else:
-				if not app:
-					app = Application()
-				one_analysis=[RunAnalysis,[filename,filename2],move_selection,intervals,variation-1,komi,profil]
-				batch.append(one_analysis)
-	
-		if not nogui:
-			app.after(100,lambda: batch_analysis(app,batch))
-			app.mainloop()
+	main(LeelaZero)

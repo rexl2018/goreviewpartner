@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
+from traceback import format_exc
 
 class GRPException(Exception):
 	def __init__(self,msg):
 		if type(msg)==type(u"abc"):
-			print "converting GRPException error message from unicode to str"
 			self.utf_msg=msg
 			self.str_msg=msg.encode("utf-8",errors='replace')
 		else:
 			self.str_msg=msg
 			self.utf_msg=msg.decode("utf-8",errors='replace')
+		log("===")
+		log(format_exc())
+		log("===")
 		Exception.__init__(self,self.str_msg)
 	
 	def __unicode__(self):
@@ -95,18 +98,18 @@ def go_to_move(move_zero,move_number=0):
 	k=0
 	while k!=move_number:
 		if not move:
-			log("The end of the sgf tree was reached before getting to move_number =",move_number)
-			log("Returning False")
+			log("The end of the sgf tree was reached before getting to move_number",move_number)
+			log("Could only reach move_number",k)
 			return False
 		move=move[0]
 		k+=1
 	return move
 
+
 def gtp2ij(move):
 	try:
-		#letters=['a','b','c','d','e','f','g','h','j','k','l','m','n','o','p','q','r','s','t']
-		letters="abcdefghjklmnopqrstuvwxyz"
-		return int(move[1:])-1,letters.index(move[0].lower())
+		letters="ABCDEFGHJKLMNOPQRSTUVWXYZ"
+		return int(move[1:])-1,letters.index(move[0])
 	except:
 		raise GRPException("Cannot convert GTP coordinates "+str(move)+" to grid coordinates!")
 
@@ -119,13 +122,18 @@ def ij2gtp(m):
 		if m==None:
 			return "pass"
 		i,j=m
-		#letters=['a','b','c','d','e','f','g','h','j','k','l','m','n','o','p','q','r','s','t']
-		letters="abcdefghjklmnopqrstuvwxyz"
+		letters="ABCDEFGHJKLMNOPQRSTUVWXYZ"
 		return letters[j]+str(i+1)
 	except:
 		raise GRPException("Cannot convert grid coordinates "+str(m)+" to GTP coordinates!")
 
-
+def sgf2ij(m):
+	# cj => 8,2
+	a, b=m
+	letters="abcdefghjklmnopqrstuvwxyz"
+	i=letters.index(b)
+	j=letters.index(a)
+	return i, j
 def ij2sgf(m):
 	# (17,0) => ???
 	try:
@@ -138,7 +146,11 @@ def ij2sgf(m):
 		raise GRPException("Cannot convert grid coordinates "+str(m)+" to SGF coordinates!")
 
 from gomill import sgf, sgf_moves
-from Tkinter import Tk, Label, Frame, StringVar, Radiobutton, N,W,E, Entry, END, Button, Toplevel, Listbox, OptionMenu
+
+from Tkinter import *
+#from Tix import Tk, NoteBook
+from Tkconstants import *
+
 import sys
 import os
 import urllib2
@@ -214,7 +226,8 @@ class DownloadFromURL(Toplevel):
 			filename+=black+'_VS_'+white+'.sgf'
 
 		log(filename)
-		write_rsgf(filename,sgf)
+		game = convert_sgf_to_utf(sgf)
+		write_rsgf(filename,game)
 
 		popup=RangeSelector(self.parent,filename,self.bots)
 		self.parent.add_popup(popup)
@@ -239,7 +252,8 @@ def write_rsgf(filename,sgf_content):
 			content=sgf_content.serialise()
 		filename2=filename
 		if type(filename2)==type(u"abc"):
-			filename2=filename2.encode(sys.getfilesystemencoding())
+			if sys.getfilesystemencoding()!="mbcs":
+				filename2=filename2.encode(sys.getfilesystemencoding())
 		try:
 			new_file=open(filename2,'w') 
 			new_file.write(content)
@@ -270,7 +284,8 @@ def write_sgf(filename,sgf_content):
 			content=sgf_content.serialise()
 		filename2=filename
 		if type(filename2)==type(u"abc"):
-			filename2=filename2.encode(sys.getfilesystemencoding())
+			if sys.getfilesystemencoding()!="mbcs":
+				filename2=filename2.encode(sys.getfilesystemencoding())
 		try:
 			new_file=open(filename2,'w')
 			new_file.write(content)
@@ -291,39 +306,45 @@ def write_sgf(filename,sgf_content):
 		log("=>",e)
 		raise GRPException(_("Could not save the SGF file: ")+filename+"\n"+unicode(e))
 
+def convert_sgf_to_utf(content):
+	game = sgf.Sgf_game.from_string(content)
+	gameroot=game.get_root()
+	sgf_moves.indicate_first_player(game) #adding the PL property on the root
+	if node_has(gameroot,"CA"):
+		ca=node_get(gameroot,"CA")
+		if ca=="UTF-8":
+			#the sgf is already in UTF, so we accept it directly
+			return game
+		else:
+			log("Encoding is",ca)
+			log("Converting from",ca,"to UTF-8")
+			encoding=(codecs.lookup(ca).name.replace("_", "-").upper().replace("ISO8859", "ISO-8859")) #from gomill code
+			content=game.serialise()
+			content=content.decode(encoding,errors='ignore') #transforming content into a unicode object
+			content=content.replace("CA["+ca+"]","CA[UTF-8]")
+			game = sgf.Sgf_game.from_string(content.encode("utf-8")) #sgf.Sgf_game.from_string requires str object, not unicode
+			return game
+	else:
+		log("the sgf has no declared encoding, we will enforce UTF-8 encoding")
+		content=game.serialise()
+		content=content.decode("utf",errors="replace").encode("utf")
+		game = sgf.Sgf_game.from_string(content,override_encoding="UTF-8")
+		return game
+	
 def open_sgf(filename):
 	filelock.acquire()
 	try:
 		#log("Opening SGF file",filename)
 		filename2=filename
 		if type(filename2)==type(u"abc"):
-			filename2=filename2.encode(sys.getfilesystemencoding())
+			if sys.getfilesystemencoding()!="mbcs":
+				filename2=filename2.encode(sys.getfilesystemencoding())
 		txt = open(filename2,'r')
-		game = sgf.Sgf_game.from_string(clean_sgf(txt.read()))
+		content=clean_sgf(txt.read())
 		txt.close()
 		filelock.release()
-		gameroot=game.get_root()
-		sgf_moves.indicate_first_player(game) #adding the PL property on the root
-		if node_has(gameroot,"CA"):
-			ca=node_get(gameroot,"CA")
-			if ca=="UTF-8":
-				#the sgf is already in UTF, so we accept it directly
-				return game
-			else:
-				log("Encoding for",filename,"is",ca)
-				log("Converting from",ca,"to UTF-8")
-				encoding=(codecs.lookup(ca).name.replace("_", "-").upper().replace("ISO8859", "ISO-8859")) #from gomill code
-				content=game.serialise()
-				content=content.decode(encoding,errors='ignore') #transforming content into a unicode object
-				content=content.replace("CA["+ca+"]","CA[UTF-8]")
-				game = sgf.Sgf_game.from_string(content.encode("utf-8")) #sgf.Sgf_game.from_string requires str object, not unicode
-				return game
-		else:
-			log("the sgf has no declared encoding, we will enforce UTF-8 encoding")
-			content=game.serialise()
-			content=content.decode("utf",errors="replace").encode("utf")
-			game = sgf.Sgf_game.from_string(content,override_encoding="UTF-8")
-			return game
+		game = convert_sgf_to_utf(content)
+		return game
 	except IOError, e:
 		filelock.release()
 		log("Could not open the SGF file",filename)
@@ -427,10 +448,7 @@ class RangeSelector(Toplevel):
 		self.protocol("WM_DELETE_WINDOW", self.close)
 		
 		self.bots=bots
-
 		self.g=open_sgf(self.filename)
-		content=self.g.serialise()
-
 		self.move_zero=self.g.get_root()
 		nb_moves=get_moves_number(self.move_zero)
 		self.nb_moves=nb_moves
@@ -440,12 +458,14 @@ class RangeSelector(Toplevel):
 
 		row+=1
 		Label(self,text=_("Bot to use for analysis:")).grid(row=row,column=1,sticky=N+W)
-		value={"slow":" (%s)"%_("Slow profile"),"fast":" (%s)"%_("Fast profile")}
-		bot_names=[bot['name']+value[bot['profile']] for bot in bots]
+		#value={"slow":" (%s)"%_("Slow profile"),"fast":" (%s)"%_("Fast profile")}
+		bot_names=[bot['name']+" - "+bot['profile'] for bot in bots]
 		self.bot_selection=StringVar()
-
-		apply(OptionMenu,(self,self.bot_selection)+tuple(bot_names)).grid(row=row,column=2,sticky=W)
-		self.bot_selection.set(bot_names[0])
+		if not bot_names:
+			Label(self,text=_("There is no bot configured in Settings")).grid(row=row,column=2,sticky=W)
+		else:
+			apply(OptionMenu,(self,self.bot_selection)+tuple(bot_names)).grid(row=row,column=2,sticky=W)
+			self.bot_selection.set(bot_names[0])
 		
 		analyser=grp_config.get("Analysis","analyser")
 		if analyser in bot_names:
@@ -590,7 +610,10 @@ class RangeSelector(Toplevel):
 		row+=10
 		Label(self,text="").grid(row=row,column=1)
 		row+=1
-		Button(self,text=_("Start"),command=self.start).grid(row=row,column=2,sticky=E)
+		start_button=Button(self,text=_("Start"),command=self.start)
+		start_button.grid(row=row,column=2,sticky=E)
+		if not bot_names:
+			start_button.config(state="disabled")
 		self.mode=s
 		self.color=c
 		self.existing_variations=existing_variations
@@ -637,17 +660,9 @@ class RangeSelector(Toplevel):
 		if self.bots!=None:
 			bot=self.bot_selection.get()
 			log("bot selection:",bot)
-			value={"slow":" (%s)"%_("Slow profile"),"fast":" (%s)"%_("Fast profile")}
-			bot={bot['name']+value[bot['profile']]:bot for bot in self.bots}[bot]
-
-			#RunAnalysis={bot_label:bot['runanalysis'] for bot in self.bots}[bot]
-			#profile={bot_label:bot['profile'] for bot in self.bots}[bot]
+			bot={bot['name']+" - "+bot['profile']:bot for bot in self.bots}[bot]
 			RunAnalysis=bot['runanalysis']
-			profile=bot['profile']
 
-			#bot_selection=int(self.bot_selection.curselection()[0])
-			#log("bot selection:",self.bots[bot_selection][0])
-			#RunAnalysis=self.bots[bot_selection][1]
 
 		if self.mode.get()=="all":
 			intervals="all moves"
@@ -681,7 +696,7 @@ class RangeSelector(Toplevel):
 		grp_config.set("Analysis","analyser",self.bot_selection.get())
 		grp_config.set("Analysis","StopAtFirstResign",self.StopAtFirstResign.get())
 
-		popup=RunAnalysis(self.parent,(self.filename,self.rsgf_filename),move_selection,intervals,variation,komi,profile,self.existing_variations.get())
+		popup=RunAnalysis(self.parent,(self.filename,self.rsgf_filename),move_selection,intervals,variation,komi,bot,self.existing_variations.get())
 		self.parent.add_popup(popup)
 		self.close()
 
@@ -690,26 +705,35 @@ class RangeSelector(Toplevel):
 
 import Queue
 import time
-from Tkinter import *
+
 import ttk
 
 
 def guess_color_to_play(move_zero,move_number):
 
 	one_move=go_to_move(move_zero,move_number)
+	
+	if one_move==False:
+		previous_move_color=guess_color_to_play(move_zero,move_number-1)
+		if previous_move_color.lower()=='b':
+			return "w"
+		else:
+			return "b"
 
-
-
+	
 	player_color,unused=one_move.get_move()
 	if player_color != None:
 		return player_color
 
 	if one_move is move_zero:
-		if node_get(move_zero,"PL").lower()=="b":
+		if node_has(move_zero,"PL"):
+			if node_get(move_zero,"PL").lower()=="b":
+				return "w"
+			if node_get(move_zero,"PL").lower()=="w":
+				return "b"
+		else:
 			return "w"
-		if node_get(move_zero,"PL").lower()=="w":
-			return "b"
-
+	
 	previous_move_color=guess_color_to_play(move_zero,move_number-1)
 
 	if previous_move_color.lower()=='b':
@@ -718,7 +742,7 @@ def guess_color_to_play(move_zero,move_number):
 		return "b"
 
 class LiveAnalysisBase():
-	def __init__(self,g,rsgf_filename,profile="slow"):
+	def __init__(self,g,rsgf_filename,profile):
 		self.g=g
 		self.rsgf_filename=rsgf_filename
 		self.profile=profile
@@ -768,6 +792,7 @@ class LiveAnalysisBase():
 						log("Analyser received a high priority message")
 						wait=0
 					self.update_queue.put((priority,msg))
+					
 				except:
 					continue
 				
@@ -796,17 +821,15 @@ class LiveAnalysisBase():
 
 			if type(msg)==type("undo xxx"):
 				move_to_undo=int(msg.split()[1])
-				#move_to_undo=int(priority+1)
 				log("received undo msg for move",move_to_undo,"and beyong")
-				if move_to_undo>self.current_move:
-					log("Analysis of move",move_to_undo,"has not started yet, so let's forget about it")
-				else:
-					log("Analysis of move",move_to_undo,"was completed already, let's remove that branch")
-					while self.current_move>=move_to_undo:
-						log("Undoing move",self.current_move,"through GTP")
-						self.undo()
-						self.current_move-=1
+				
 
+				log("GTP bot is currently at move",len(self.bot.history))
+				while len(self.bot.history)>=move_to_undo:
+					log("Undoing move",len(self.bot.history),"through GTP")
+					self.undo()
+					self.current_move-=1
+				
 				log("Deleting the SGF branch")
 				parent=go_to_move(self.move_zero,move_to_undo-1)
 				new_branch=parent[0]
@@ -820,6 +843,7 @@ class LiveAnalysisBase():
 				write_rsgf(self.rsgf_filename,self.g)
 				self.cpu_lock.release()
 				self.update_queue.put((0,"wait"))
+				self.best_moves_queue.put((priority,msg))#sending echo
 				continue
 
 			log("Analyser received msg to analyse move",msg)
@@ -849,7 +873,7 @@ class LiveAnalysisBase():
 				log("Game move:",game_move)
 				if game_move:
 					if self.no_variation_if_same_move:
-						if ij2gtp(game_move)==answer.lower():
+						if ij2gtp(game_move)==answer:
 							log("Bot move and game move are the same ("+answer+"), removing variations for this move")
 							parent=go_to_move(self.move_zero,self.current_move-1)
 							for child in parent[1:]:
@@ -871,7 +895,7 @@ class LiveAnalysisBase():
 
 
 class RunAnalysisBase(Toplevel):
-	def __init__(self,parent,filenames,move_range,intervals,variation,komi,profile="slow",existing_variations="remove_everything"):
+	def __init__(self,parent,filenames,move_range,intervals,variation,komi,profile,existing_variations="remove_everything"):
 		if parent!="no-gui":
 			Toplevel.__init__(self,parent)
 		self.parent=parent
@@ -1032,7 +1056,7 @@ class RunAnalysisBase(Toplevel):
 				game_move=go_to_move(self.move_zero,self.current_move).get_move()[1]
 				if game_move:
 					if self.no_variation_if_same_move:
-						if ij2gtp(game_move)==answer.lower():
+						if ij2gtp(game_move)==answer:
 							log("Bot move and game move are the same ("+answer+"), removing variations for this move")
 							parent=go_to_move(self.move_zero,self.current_move-1)
 							for child in parent[1:]:
@@ -1042,7 +1066,7 @@ class RunAnalysisBase(Toplevel):
 				#what could possibly go wrong with this?
 				pass
 			
-			if (answer.lower()=="resign") and (self.stop_at_first_resign==True):
+			if (answer=="RESIGN") and (self.stop_at_first_resign==True):
 				log("")
 				log("The analysis will stop now")
 				log("")
@@ -1060,8 +1084,7 @@ class RunAnalysisBase(Toplevel):
 
 			self.current_move+=1
 			if self.parent!="no-gui":
-				self.update_queue.put(self.current_move)
-			
+				self.update_queue.put(self.total_done)
 		return
 
 	def abort(self):
@@ -1093,16 +1116,12 @@ class RunAnalysisBase(Toplevel):
 			if self.time_per_move!=0:
 				self.lab2.config(text=_("Remaining time: %ih, %im, %is")%(remaining_h,remaining_m,remaining_s))
 			self.lab1.config(text=_("Currently at move %i/%i")%(self.current_move,self.max_move))
-			self.pb.step()
 			
-			
-
-			if self.total_done==1:
+			self.pb.update_idletasks()
+			if msg==1:#msg contains the value of self.total_done
 				if not self.review_button:
 					self.review_button=Button(self.right_frame,text=_("Start the review"),command=self.start_review)
 					self.review_button.pack()
-				
-			
 		except:
 			pass
 
@@ -1110,6 +1129,7 @@ class RunAnalysisBase(Toplevel):
 			if msg==None:
 				self.parent.after(250,self.follow_analysis)
 			else:
+				self.pb.step()
 				self.parent.after(10,self.follow_analysis)
 		else:
 			self.end_of_analysis()
@@ -1199,16 +1219,16 @@ class RunAnalysisBase(Toplevel):
 
 
 class BotOpenMove():
-	def __init__(self,sgf_g,profile="slow"):
+	def __init__(self,sgf_g,profile):
 		self.name='Bot'
 		self.bot=None
 		self.okbot=False
 		self.sgf_g=sgf_g
 		self.profile=profile
 
-	def start(self):
+	def start(self,silentfail=True):
 		try:
-			result=self.my_starting_procedure(self.sgf_g,profile=self.profile,silentfail=True)
+			result=self.my_starting_procedure(self.sgf_g,profile=self.profile,silentfail=silentfail)
 			if result:
 				self.bot=result
 				self.okbot=True
@@ -1249,36 +1269,26 @@ class BotOpenMove():
 			log("killing",self.name)
 			self.bot.close()
 
-def bot_starting_procedure(bot_name,bot_gtp_name,bot_gtp,sgf_g,profile="slow",silentfail=False):
-	log("Bot starting procedure started with profile =",profile)
+def bot_starting_procedure(bot_name,bot_gtp_name,bot_gtp,sgf_g,profile,silentfail=False):
+	
+	log("Bot starting procedure started with profile =",profile["profile"])
 	log("\tbot name:",bot_name)
 	log("\tbot gtp name",bot_gtp_name)
-	if profile=="slow":
-		command_entry="SlowCommand"
-		parameters_entry="SlowParameters"
-	elif profile=="fast":
-		command_entry="FastCommand"
-		parameters_entry="FastParameters"
+	
+	command_entry=profile["command"]
+	parameters_entry=profile["parameters"]
 
 	size=sgf_g.get_size()
 
 	try:
-		try:
-			bot_command_line=grp_config.get(bot_name, command_entry)
-		except:
-			#normaly, this should not happen anymore.
-			#to be deleted soon, or moved somewhere else
-			raise GRPException(_("The config.ini file does not contain %s entry for %s !")%(command_entry, bot_name))
-
-		if not bot_command_line:
-			raise GRPException(_("The config.ini file %s entry for %s is empty!")%(command_entry, bot_name))
 
 		log("Starting "+bot_name+"...")
 		try:
-			bot_command_line=[grp_config.get(bot_name, command_entry)]+grp_config.get(bot_name, parameters_entry).split()
+			#bot_command_line=[grp_config.get(bot_name, command_entry)]+grp_config.get(bot_name, parameters_entry).split()
+			bot_command_line=[command_entry]+parameters_entry.split()
 			bot=bot_gtp(bot_command_line)
 		except Exception,e:
-			raise GRPException((_("Could not run %s using the command from config.ini file:")%bot_name)+"\n"+grp_config.get(bot_name, command_entry)+" "+grp_config.get(bot_name, parameters_entry)+"\n"+unicode(e))
+			raise GRPException((_("Could not run %s using the command from config.ini file:")%bot_name)+"\n"+command_entry+" "+parameters_entry+"\n"+unicode(e))
 
 		log(bot_name+" started")
 		log(bot_name+" identification through GTP...")
@@ -1287,10 +1297,11 @@ def bot_starting_procedure(bot_name,bot_gtp_name,bot_gtp,sgf_g,profile="slow",si
 		except Exception, e:
 			raise GRPException((_("%s did not reply as expected to the GTP name command:")%bot_name)+"\n"+unicode(e))
 
-
-		if answer!=bot_gtp_name:
-			raise GRPException((_("%s did not identify itself as expected:")%bot_name)+"\n'"+bot_gtp_name+"' != '"+answer+"'")
-
+		if bot_gtp_name!='GtpBot':
+			if answer!=bot_gtp_name:
+				raise GRPException((_("%s did not identify itself as expected:")%bot_name)+"\n'"+bot_gtp_name+"' != '"+answer+"'")
+		else:
+			bot_gtp_name=answer
 
 		log(bot_name+" identified itself properly")
 		log("Checking version through GTP...")
@@ -1414,14 +1425,9 @@ def draw_logo(logo,event=None,stretch="horizontal"):
 
 		logo.create_oval(x1, y1, x2, y2, fill="black", outline="")
 
-
-
-
-import getopt
-
 import __main__
 try:
-	usage="usage: python "+__main__.__file__+" [--range=<range>] [--color=<both|black|white>] [--komi=<komi>] [--variation=<variation>] [--profil=<fast|slow>] [--no-gui] <sgf file1> <sgf file2> <sgf file3>"
+	usage="usage: python "+__main__.__file__+" [--range=<range>] [--color=<both|black|white>] [--komi=<komi>] [--variation=<variation>] [--profil=<\"profil\">] [--no-gui] <sgf file1> <sgf file2> <sgf file3>"
 except:
 	log("Command line features are disabled")
 	usage=""
@@ -1434,7 +1440,8 @@ def parse_command_line(filename,argv):
 	leaves=get_all_sgf_leaves(move_zero)
 
 	found=False
-	argv=[(unicode(p,errors="replace"),unicode(v,errors="replace")) for p,v in argv] #ok, this is maybe overkill...
+	
+	#argv=[(unicode(p,errors="replace"),unicode(v,errors="replace")) for p,v in argv] #ok, this is maybe overkill...
 	for p,v in argv:
 		if p=="--variation":
 			try:
@@ -1530,17 +1537,12 @@ def parse_command_line(filename,argv):
 
 	found=False
 	for p,v in argv:
-		if p=="--profil":
-			if v.lower() in ("slow","fast"):
-				profil=v
-				found=True
-			else:
-				show_error("Wrong profil parameter\n"+usage)
-				sys.exit()
+		if p=="--profile":
+			profile=v
+			found=True
 	if not found:
-		profil="slow"
-
-	log("Profil:",profil)
+		profile=None
+	log("Profile:",profile)
 
 	nogui=False
 	for p,v in argv:
@@ -1548,7 +1550,7 @@ def parse_command_line(filename,argv):
 			nogui=True
 			break
 
-	return move_selection,intervals,variation,komi,nogui,profil
+	return move_selection,intervals,variation,komi,nogui,profile
 
 # from http://www.py2exe.org/index.cgi/WhereAmI
 def we_are_frozen():
@@ -1601,6 +1603,7 @@ class MyConfig():
 		self.default_values["general"]["rsgffolder"]=""
 		self.default_values["general"]["pngfolder"]=""
 		self.default_values["general"]["livefolder"]=""
+		self.default_values["general"]["stonesound"]=""
 		
 		self.default_values["analysis"]={}
 		self.default_values["analysis"]["maxvariations"]="26"
@@ -1621,6 +1624,10 @@ class MyConfig():
 		self.default_values["review"]["variationslabel"]="letter"
 		self.default_values["review"]["invertedmousewheel"]="False"
 		self.default_values["review"]["lastgraph"]=""
+		self.default_values["review"]["yellowbar"]="#F39C12"
+		self.default_values["review"]["lastbot"]=""
+		self.default_values["review"]["lastmap"]=""
+		self.default_values["review"]["oneortwopanels"]="1"
 		
 		self.default_values["live"]={}
 		self.default_values["live"]["livegobanratio"]="0.4"
@@ -1631,62 +1638,7 @@ class MyConfig():
 		self.default_values["live"]["analyser"]=""
 		self.default_values["live"]["black"]=""
 		self.default_values["live"]["white"]=""
-		
-		self.default_values["leela"]={}
-		self.default_values["leela"]["slowcommand"]=""
-		self.default_values["leela"]["slowparameters"]="--gtp --noponder"
-		self.default_values["leela"]["slowtimepermove"]="15"
-		self.default_values["leela"]["fastcommand"]=""
-		self.default_values["leela"]["fastparameters"]="--gtp --noponder"
-		self.default_values["leela"]["fasttimepermove"]="5"
-		self.default_values["leela"]["analysisbot"]="slow"
-		self.default_values["leela"]["liveanalysisbot"]="both"
-		self.default_values["leela"]["liveplayerbot"]="fast"
-		self.default_values["leela"]["reviewbot"]="fast"
-		
-		self.default_values["gnugo"]={}
-		self.default_values["gnugo"]["slowcommand"]=""
-		self.default_values["gnugo"]["slowparameters"]="--mode=gtp --level=15"
-		self.default_values["gnugo"]["fastcommand"]=""
-		self.default_values["gnugo"]["fastparameters"]="--mode=gtp --level=10"
-		self.default_values["gnugo"]["variations"]="4"
-		self.default_values["gnugo"]["deepness"]="4"
-		self.default_values["gnugo"]["analysisbot"]="slow"
-		self.default_values["gnugo"]["liveanalysisbot"]="both"
-		self.default_values["gnugo"]["liveplayerbot"]="fast"
-		self.default_values["gnugo"]["reviewbot"]="fast"
-		
-		self.default_values["leelazero"]={}
-		self.default_values["leelazero"]["slowcommand"]=""
-		self.default_values["leelazero"]["slowparameters"]="--gtp --noponder --weights weights.txt"
-		self.default_values["leelazero"]["slowtimepermove"]="15"
-		self.default_values["leelazero"]["fastcommand"]=""
-		self.default_values["leelazero"]["fastparameters"]="--gtp --noponder --weights weights.txt"
-		self.default_values["leelazero"]["fasttimepermove"]="5"
-		self.default_values["leelazero"]["analysisbot"]="slow"
-		self.default_values["leelazero"]["liveanalysisbot"]="both"
-		self.default_values["leelazero"]["liveplayerbot"]="fast"
-		self.default_values["leelazero"]["reviewbot"]="fast"
-		
-		self.default_values["aq"]={}
-		self.default_values["aq"]["slowcommand"]=""
-		self.default_values["aq"]["slowparameters"]=""
-		self.default_values["aq"]["fastcommand"]=""
-		self.default_values["aq"]["fastparameters"]=""
-		self.default_values["aq"]["analysisbot"]="slow"
-		self.default_values["aq"]["liveanalysisbot"]="both"
-		self.default_values["aq"]["liveplayerbot"]="fast"
-		self.default_values["aq"]["reviewbot"]="fast"
-		
-		self.default_values["ray"]={}
-		self.default_values["ray"]["slowcommand"]=""
-		self.default_values["ray"]["slowparameters"]="--no-gpu --const-time 15"
-		self.default_values["ray"]["fastcommand"]=""
-		self.default_values["ray"]["fastparameters"]="--no-gpu --const-time 5"
-		self.default_values["ray"]["analysisbot"]="slow"
-		self.default_values["ray"]["liveanalysisbot"]="both"
-		self.default_values["ray"]["liveplayerbot"]="fast"
-		self.default_values["ray"]["reviewbot"]="fast"
+		self.default_values["live"]["thinkbeforeplaying"]="0"
 		
 	def set(self, section, key, value):
 		if type(value) in (type(1), type(0.5), type(True)):
@@ -1764,6 +1716,17 @@ class MyConfig():
 		self.config.set(section,key,value)
 		self.config.write(open(self.config_file,"w"))
 
+	def get_sections(self):
+		return [section.decode("utf-8") for section in self.config.sections()]
+
+	def get_options(self,section):
+		return [option.decode("utf-8") for option in self.config.options(section)]
+	
+	def remove_section(self,section):
+		result=self.config.remove_section(section)
+		self.config.write(open(self.config_file,"w"))
+		return result
+
 grp_config=MyConfig(config_file)
 
 log("Reading language setting from config file")
@@ -1771,7 +1734,7 @@ log("Reading language setting from config file")
 lang=grp_config.get("General","Language")
 
 
-available_translations={"en": "English", "fr" : "Français", "de" : "Deutsch", "kr" : "한국어", "zh": "中文"}
+available_translations={"en": "English", "fr" : "Français", "de" : "Deutsch", "kr" : "한국어", "zh": "中文", "pl": "Polski"}
 if not lang:
 	log("No language setting in the config file")
 	log("System language detection:")
@@ -1882,67 +1845,6 @@ def batch_analysis(app,batch):
 		app.force_close()
 
 		
-def slow_profile_bots():
-	from leela_analysis import Leela
-	from gnugo_analysis import GnuGo
-	from ray_analysis import Ray
-	from aq_analysis import AQ
-	from leela_zero_analysis import LeelaZero
-
-	bots=[]
-	for bot in [Leela, AQ, Ray, GnuGo, LeelaZero]:
-		if grp_config.get(bot['name'],"SlowCommand")!="":
-			bots.append(bot)
-			bot['profile']="slow"
-	return bots
-
-def fast_profile_bots():
-	from leela_analysis import Leela
-	from gnugo_analysis import GnuGo
-	from ray_analysis import Ray
-	from aq_analysis import AQ
-	from leela_zero_analysis import LeelaZero
-
-	bots=[]
-	for bot in [Leela, AQ, Ray, GnuGo, LeelaZero]:
-		if grp_config.get(bot['name'],"FastReviewCommand")!="":
-			bots.append(bot)
-			bot['profile']="fast"
-	return bots
-
-
-def get_available(use):
-	from leela_analysis import Leela
-	from gnugo_analysis import GnuGo
-	from ray_analysis import Ray
-	from aq_analysis import AQ
-	from leela_zero_analysis import LeelaZero
-
-	bots=[]
-	for bot in [Leela, AQ, Ray, GnuGo, LeelaZero]:
-		slow=False
-		fast=False
-		if grp_config.get(bot['name'],use)=="slow":
-			slow=True
-		elif grp_config.get(bot['name'],use)=="fast":
-			fast=True
-		elif grp_config.get(bot['name'],use)=="both":
-			slow=True
-			fast=True
-		if slow:
-			if grp_config.get(bot['name'],"SlowCommand")!="":
-				bot2=dict(bot)
-				bots.append(bot2)
-				bot2['profile']="slow"
-		if fast:
-			if grp_config.get(bot['name'],"FastCommand")!="":
-				bot2=dict(bot)
-				bots.append(bot2)
-				bot2['profile']="fast"
-	return bots
-
-
-		
 def opposite_rate(value):
 	return str(100-float(value[:-1]))+"%"
 
@@ -2006,7 +1908,6 @@ class Application(Tk):
 		self.withdraw()
 	
 	def force_close(self):
-		import os
 		os._exit(0)
 	
 	def remove_popup(self,popup):
@@ -2014,6 +1915,10 @@ class Application(Tk):
 		self.popups.remove(popup)
 		log("Totally",len(self.popups),"popups left")
 		if len(self.popups)==0:
+			try:
+				self.destroy()
+			except:
+				pass
 			time.sleep(2)
 			log("")
 			log("GoReviewPartner is closing")
@@ -2036,7 +1941,7 @@ class Application(Tk):
 			log("You are welcome to support GoReviewPartner (bug reports, code fixes, translations, ideas...). If you are interested, get in touch through Github, Reddit, or LifeIn19x19!")
 			if we_are_frozen():
 				#running from py2exe
-				raw_input()
+				time.sleep(2)
 			self.force_close()
 			
 	def add_popup(self,popup):
@@ -2136,10 +2041,28 @@ def canvas2png(goban,filename):
 	left = goban.winfo_rootx()
 	width = goban.winfo_width()
 	height = goban.winfo_height()
-	monitor = {'top': top, 'left': left, 'width': width, 'height': height}
+	try:
+		dim=goban.dim
+		space=goban.space
+		current_tab_id=goban.parent.right_notebook.index("current")
+		goban.parent.right_notebook.select(0)
+		goban.parent.update_idletasks()
+		goban.parent.right_notebook.select(current_tab_id)
+		goban.parent.update_idletasks()
+		top = goban.winfo_rooty()
+		v_center=top+goban.anchor_y+space*(dim+3)/2
+		h_center=left+goban.anchor_x+space*(dim+3)/2
+		monitor = {'top': int(v_center-space*(dim+3)/2)+1, 'left': int(h_center-space*(dim+3)/2)+1, 'width': int(space*(dim+3))-2, 'height': int(space*(dim+3))-2}
+	except:
+		monitor = {'top': int(top), 'left': int(left), 'width': int(width), 'height': int(height)}
+	
+	goban.after(500,lambda: screenshot(monitor, filename))
+
+def screenshot(monitor, filename):
+	log("Screenshot!")
+	log(monitor)
 	sct_img = mss.mss().grab(monitor)
 	mss.tools.to_png(sct_img.rgb, sct_img.size, output=filename)
-
 
 def get_variation_comments(one_variation):
 	comments=''
@@ -2168,9 +2091,9 @@ def get_position_comments(current_move,gameroot):
 		game_move_color=guess_color_to_play(gameroot,current_move)
 	
 	if game_move_color.lower()=="w":
-		comments+="\n"+(position_data_formating["W"])%ij2gtp(game_move).upper()
+		comments+="\n"+(position_data_formating["W"])%ij2gtp(game_move)
 	elif game_move_color.lower()=="b":
-		comments+="\n"+(position_data_formating["B"])%ij2gtp(game_move).upper()
+		comments+="\n"+(position_data_formating["B"])%ij2gtp(game_move)
 	
 	node=get_node(gameroot,current_move)
 	if node_has(node,"CBM"):
@@ -2266,7 +2189,7 @@ def get_position_short_comments(current_move,gameroot):
 		else:
 			player=_("White")
 	
-	comments+="%s: %s"%(player,ij2gtp(game_move).upper())
+	comments+="%s: %s"%(player,ij2gtp(game_move))
 
 	if node_has(node,"CBM"):
 		bot=node_get(gameroot,"BOT")
@@ -2274,7 +2197,7 @@ def get_position_short_comments(current_move,gameroot):
 		try:
 			if node_has(node[1],"BKMV"):
 				if node_get(node[1],"BKMV")=="yes":
-					comments+=_(": Book")
+					comments+=": "+_("Book move")
 		except:
 			pass
 	else:
@@ -2300,6 +2223,13 @@ def node_set(node, property_name, value):
 		value=value.encode("utf-8")
 	if property_name.lower() in ("w","b"):
 		node.set_move(property_name.encode("utf-8"),value)
+	elif  property_name.upper() in ("TBM","TWM", "IBM", "IWM"):
+		new_list=[]
+		for ij in value:
+			new_list.append(ij2sgf(ij).encode("utf-8"))
+		if type(property_name)==type(u"abc"):
+			property_name=property_name.encode("utf-8")
+		node.set_raw_list(property_name,new_list)
 	else:
 		if type(property_name)==type(u"abc"):
 			property_name=property_name.encode("utf-8")
@@ -2318,3 +2248,278 @@ def node_has(node, property_name):
 	if type(property_name)==type(u"abc"):
 		property_name=property_name.encode("utf-8")
 	return node.has_property(property_name)
+
+def get_available():
+	from leela_analysis import Leela
+	from gnugo_analysis import GnuGo
+	from ray_analysis import Ray
+	from aq_analysis import AQ
+	from leela_zero_analysis import LeelaZero
+	from pachi_analysis import Pachi
+	from phoenixgo_analysis import PhoenixGo
+	
+	bots=[]
+	for bot in [Leela, AQ, Ray, GnuGo, LeelaZero, Pachi, PhoenixGo]:
+		profiles=get_bot_profiles(bot["name"])
+		for profile in profiles:
+			bot2=dict(bot)
+			bots.append(bot2)
+			for key, value in profile.items():
+				bot2[key]=value
+	return bots
+
+def get_gtp_bots():
+	from gtp_bot import GtpBot
+	
+	bots=[]
+	for bot in [GtpBot]:
+		profiles=get_bot_profiles(bot["name"])
+		for profile in profiles:
+			bot2=dict(bot)
+			bots.append(bot2)
+			for key, value in profile.items():
+				bot2[key]=value
+	return bots
+
+def get_bot_profiles(bot="",withcommand=True):
+	sections=grp_config.get_sections()
+	if bot!="":
+		bots=[bot]
+	else:
+		bots=["Leela","GnuGo","Ray","AQ","LeelaZero","Pachi","PhoenixGo"]
+	profiles=[]
+	for section in sections:
+		for bot in bots:
+			if bot+"-" in section:
+				command=grp_config.get(section,"command")
+				if (not command) and (withcommand==True):
+					continue
+				data={"bot":bot,"command":"","parameters":"","timepermove":"","variations":"4","deepness":"4"}
+				for option in grp_config.get_options(section):
+					value=grp_config.get(section,option)
+					data[option]=value
+				profiles.append(data)
+	
+	return profiles
+
+class BotProfiles(Frame):
+	def __init__(self,parent,bot):
+		Frame.__init__(self,parent)
+		self.parent=parent
+		self.bot=bot
+		self.profiles=get_bot_profiles(bot,False)
+		profiles_frame=self
+		
+		self.listbox = Listbox(profiles_frame)
+		self.listbox.grid(column=10,row=10,rowspan=10)
+		self.update_listbox()
+		
+		row=10
+		Label(profiles_frame,text=_("Profile")).grid(row=row,column=11,sticky=W)
+		self.profile = StringVar()
+		Entry(profiles_frame, textvariable=self.profile, width=30).grid(row=row,column=12)
+
+		row+=1
+		Label(profiles_frame,text=_("Command")).grid(row=row,column=11,sticky=W)
+		self.command = StringVar() 
+		Entry(profiles_frame, textvariable=self.command, width=30).grid(row=row,column=12)
+		
+		row+=1
+		Label(profiles_frame,text=_("Parameters")).grid(row=row,column=11,sticky=W)
+		self.parameters = StringVar() 
+		Entry(profiles_frame, textvariable=self.parameters, width=30).grid(row=row,column=12)
+
+		row+=10
+		buttons_frame=Frame(profiles_frame)
+		buttons_frame.grid(row=row,column=10,sticky=W,columnspan=3)
+		Button(buttons_frame, text=_("Add profile"),command=self.add_profile).grid(row=row,column=1,sticky=W)
+		Button(buttons_frame, text=_("Modify profile"),command=self.modify_profile).grid(row=row,column=2,sticky=W)
+		Button(buttons_frame, text=_("Delete profile"),command=self.delete_profile).grid(row=row,column=3,sticky=W)
+		Button(buttons_frame, text=_("Test"),command=lambda: self.parent.parent.test(self.bot_gtp,self.command,self.parameters)).grid(row=row,column=4,sticky=W)
+		self.listbox.bind("<Button-1>", lambda e: self.after(100,self.change_selection))
+
+		self.index=-1
+		
+	def clear_selection(self):
+		self.index=-1
+		self.profile.set("")
+		self.command.set("")
+		self.parameters.set("")
+		
+	def change_selection(self):
+		try:
+			index=self.listbox.curselection()[0]
+			self.index=index
+			log("Profile",index,"selected")
+		except:
+			log("No selection")
+			self.clear_selection()
+			return
+		data=self.profiles[index]
+		self.profile.set(data["profile"])
+		self.command.set(data["command"])
+		self.parameters.set(data["parameters"])
+
+	def empty_profiles(self):
+		profiles=self.profiles
+		sections=grp_config.get_sections()
+		for bot in [profile["bot"] for profile in profiles]:
+			for section in sections:
+				if bot+"-" in section:
+					grp_config.remove_section(section)
+		self.update_listbox()
+
+	def create_profiles(self):
+		profiles=self.profiles
+		p=0
+		for profile in profiles:
+			bot=profile["bot"]
+			for key,value in profile.items():
+				if key!="bot":
+					grp_config.add_entry(bot+"-"+str(p),key,value)
+			p+=1
+		self.update_listbox()
+
+	def add_profile(self):
+		profiles=self.profiles
+		if self.profile.get()=="":
+			return
+		data={"bot":self.bot}
+		data["profile"]=self.profile.get()
+		data["command"]=self.command.get()
+		data["parameters"]=self.parameters.get()
+		self.empty_profiles()
+		profiles.append(data)
+		self.create_profiles()
+		self.clear_selection()
+
+
+	def modify_profile(self):
+		profiles=self.profiles
+		if self.profile.get()=="":
+			return
+		
+		if self.index<0:
+			log("No selection")
+			return
+		index=self.index
+		
+		profiles[index]["profile"]=self.profile.get()
+		profiles[index]["command"]=self.command.get()
+		profiles[index]["parameters"]=self.parameters.get()
+		
+		self.empty_profiles()
+		self.create_profiles()
+		self.clear_selection()
+
+	def delete_profile(self):
+		profiles=self.profiles
+		
+		if self.index<0:
+			log("No selection")
+			return
+		index=self.index
+		
+		self.empty_profiles()
+		del profiles[index]
+		self.create_profiles()
+		self.clear_selection()
+
+
+	def update_listbox(self):
+		profiles=self.profiles
+		self.listbox.delete(0, END)
+		for item in [profile["bot"]+" - "+profile["profile"] for profile in profiles]:
+			self.listbox.insert(END, item)
+
+from sys import argv
+import getopt
+def main(bot):
+	if len(argv)==1:
+		temp_root = Tk()
+		filename = open_sgf_file(parent=temp_root)
+		temp_root.destroy()
+		log(filename)
+		log("gamename:",filename[:-4])
+		if not filename:
+			sys.exit()
+		log("filename:",filename)
+
+		top = Application()
+		
+		
+		bots=[]
+		profiles=get_bot_profiles(bot["name"])
+		for profile in profiles:
+			bot2=dict(bot)
+			for key, value in profile.items():
+				bot2[key]=value
+			bots.append(bot2)
+		if len(bots)>0:
+			popup=RangeSelector(top,filename,bots=bots)
+			top.add_popup(popup)
+			top.mainloop()
+		else:
+			log("Not profiles available for "+bot["name"]+" in \"config.ini\"")
+	else:
+		existing_profiles=[p["profile"] for p in get_bot_profiles(bot["name"])]
+		if not existing_profiles:
+			log("Not profiles available for "+bot["name"]+" in config.ini")
+			sys.exit()
+		try:
+			parameters=getopt.getopt(argv[1:], '', ['no-gui','range=', 'color=', 'komi=',"variation=", "profile="])
+		except Exception, e:
+			show_error(unicode(e)+"\n"+usage)
+			sys.exit()
+		if not parameters[1]:
+			show_error("SGF file missing\n"+usage)
+			sys.exit()
+		
+		
+		app=None
+		batch=[]
+		for filename in parameters[1]:
+			move_selection,intervals,variation,komi,nogui,profile=parse_command_line(filename,parameters[0])
+			if not profile:
+				log("No profile indicated, the profile \""+existing_profiles[0]+"\" will be used")
+				profile=existing_profiles[0]
+			if profile not in existing_profiles:
+				log("Unknown profile \""+profile+"\" for",bot["name"])
+				log("The profile \""+profile+"\" is not defined in \"config.ini\"")
+				log("The existing profiles are"," ".join(['"'+p+'"' for p in existing_profiles]))
+				sys.exit()
+			profile={p["profile"]:p for p in get_bot_profiles(bot["name"])}[profile]
+			
+			if isinstance(filename, str):
+				filename = unicode(filename, 'utf-8')
+			
+			filename2=".".join(filename.split(".")[:-1])+".rsgf"
+			if nogui:
+				popup=bot["runanalysis"]("no-gui",[filename,filename2],move_selection,intervals,variation-1,komi,profile)
+				popup.terminate_bot()
+			else:
+				if not app:
+					app = Application()
+				one_analysis=[bot["runanalysis"],[filename,filename2],move_selection,intervals,variation-1,komi,profile]
+				batch.append(one_analysis)
+	
+		if not nogui:
+			app.after(100,lambda: batch_analysis(app,batch))
+			app.mainloop()
+
+try:
+	from playsound import playsound
+	mp3=grp_config.get("General","StoneSound")
+	if mp3:
+		log("Reading",mp3)
+		with open(mp3, mode='rb') as sound_file: #pre loading the sound file in memory
+			fileContent = sound_file.read()
+	
+	def play_stone_sound():
+		if mp3:
+			threading.Thread(target=playsound, args=(mp3,)).start()
+	
+except Exception,e:
+	log("Stone sound disabled:")
+	log(e)
+	play_stone_sound=lambda: None

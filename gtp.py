@@ -3,9 +3,7 @@ from __future__ import unicode_literals
 
 import subprocess,sys
 import threading, Queue
-
-from time import sleep,time
-
+from time import sleep
 from toolbox import log,GRPException
 
 class gtp():
@@ -25,20 +23,22 @@ class gtp():
 	def consume_stderr(self):
 		while 1:
 			try:
-				err_line=self.process.stderr.readline()
+				err_line=self.process.stderr.readline().decode("utf-8")
 				if err_line:
+					log("#",err_line.strip())
 					self.stderr_queue.put(err_line)
 				else:
 					log("leaving consume_stderr thread")
 					return
-			except Exception, e:
+			except Exception,e:
 				log("leaving consume_stderr thread due to exception")
+				log(e)
 				return
 	
 	def consume_stdout(self):
 		while 1:
 			try:
-				line=self.process.stdout.readline()
+				line=self.process.stdout.readline().decode("utf-8")
 				if line:
 					self.stdout_queue.put(line)
 				else:
@@ -61,9 +61,9 @@ class gtp():
 		self.c+=1
 
 	def readline(self):
-		answer=self.process.stdout.readline()
+		answer=self.process.stdout.readline().decode("utf-8")
 		while answer in ("\n","\r\n","\r"):
-			answer=self.process.stdout.readline()
+			answer=self.process.stdout.readline().decode("utf-8")
 		return answer
 	
 	####hight level function####
@@ -89,6 +89,10 @@ class gtp():
 		else:return False	
 
 	def place_black(self,move):
+		if move == "RESIGN":
+			log("WARNING: trying to play RESIGN as GTP move")
+			self.history.append(["b",move])
+			return True
 		self.write("play black "+move)
 		answer=self.readline()
 		if answer[0]=="=":
@@ -97,6 +101,10 @@ class gtp():
 		else:return False	
 	
 	def place_white(self,move):
+		if move == "RESIGN":
+			log("WARNING: trying to play RESIGN as GTP move")
+			self.history.append(["w",move])
+			return True
 		self.write("play white "+move)
 		answer=self.readline()
 		if answer[0]=="=":
@@ -109,7 +117,7 @@ class gtp():
 		self.write("genmove black")
 		answer=self.readline().strip()
 		try:
-			move=answer.split(" ")[1]
+			move=answer.split(" ")[1].upper()
 			self.history.append(["b",move])
 			return move
 		except Exception, e:
@@ -120,7 +128,7 @@ class gtp():
 		self.write("genmove white")
 		answer=self.readline().strip()
 		try:
-			move=answer.split(" ")[1]
+			move=answer.split(" ")[1].upper()
 			self.history.append(["w",move])
 			return move
 		except Exception, e:
@@ -206,7 +214,7 @@ class gtp():
 	def final_score(self):
 		self.write("final_score")
 		answer=self.readline()
-		return " ".join(answer.split(" ")[1:])
+		return " ".join(answer.split(" ")[1:]).strip()
 	
 	#is that needed?
 	def final_status(self,move):

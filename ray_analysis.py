@@ -1,21 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-from gtp import gtp, GRPException
+from gtp import gtp
 import sys
-from gomill import sgf, sgf_moves
-from sys import exit,argv
 from Tkinter import *
-
-import os
-import threading
-import ttk
-
 from toolbox import *
 from toolbox import _
-
 from time import time
-
 
 class RayAnalysis():
 
@@ -61,12 +52,12 @@ class RayAnalysis():
 				#log("one_sequence=",one_sequence[1:])
 				first_variation_move=True
 				for one_deep_move in one_sequence.split(',')[1:]:
-					if one_deep_move.lower() in ["pass","resign"]:
-						log("Leaving the variation when encountering",one_deep_move.lower())
+					if one_deep_move in ["PASS","RESIGN"]:
+						log("Leaving the variation when encountering",one_deep_move)
 						break
 					current_color=one_deep_move[0]
 					one_deep_move=one_deep_move[1:].strip()
-					if one_deep_move.lower()!="pass":
+					if one_deep_move!="PASS":
 						i,j=gtp2ij(one_deep_move)
 						new_child=previous_move.new_child()
 						node_set(new_child,current_color,(i,j))
@@ -131,19 +122,85 @@ class RayAnalysis():
 		self.time_per_move=0
 		return ray
 
-def ray_starting_procedure(sgf_g,profile="slow",silentfail=False):
+def ray_starting_procedure(sgf_g,profile,silentfail=False):
 	return bot_starting_procedure("Ray","RLO",Ray_gtp,sgf_g,profile,silentfail)
 
 
 class RunAnalysis(RayAnalysis,RunAnalysisBase):
-	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile="slow",existing_variations="remove_everything"):
+	def __init__(self,parent,filename,move_range,intervals,variation,komi,profile,existing_variations="remove_everything"):
 		RunAnalysisBase.__init__(self,parent,filename,move_range,intervals,variation,komi,profile,existing_variations)
 
 class LiveAnalysis(RayAnalysis,LiveAnalysisBase):
-	def __init__(self,g,filename,profile="slow"):
+	def __init__(self,g,filename,profile):
 		LiveAnalysisBase.__init__(self,g,filename,profile)
 
+import subprocess
+import Queue
+
 class Ray_gtp(gtp):
+
+	def __init__(self,command):
+		self.c=1
+		self.command_line=command[0]+" "+" ".join(command[1:])
+		command=[c.encode(sys.getfilesystemencoding()) for c in command]
+		self.process=subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		self.size=0
+		
+		self.stderr_starting_queue=Queue.Queue(maxsize=100)
+		self.stderr_queue=Queue.Queue()
+		self.stdout_queue=Queue.Queue()
+		threading.Thread(target=self.consume_stderr).start()
+		
+		log("Checking Ray stderr to check for OpenCL SGEMM tuner running")
+		delay=60
+		while 1:
+			try:
+				err_line=self.stderr_starting_queue.get(True,delay)
+				delay=10
+				if "Started OpenCL SGEMM tuner." in err_line:
+					log("OpenCL SGEMM tuner is running")
+					show_info(_("Ray is currently running the OpenCL SGEMM tuner. It may take several minutes until Ray is ready."))
+					break
+				elif "Loaded existing SGEMM tuning.\n" in err_line:
+					log("OpenCL SGEMM tuner has already been runned")
+					break
+				elif "BLAS Core:" in err_line:
+					log("Could not find out, abandoning")
+					break
+				elif "Could not open weights file" in err_line:
+					show_info(err_line.strip())
+					break
+				elif "Weights file is the wrong version." in err_line:
+					show_info(err_line.strip())
+					break
+
+			except:
+				log("Could not find out, abandoning")
+				break
+		
+		
+		self.free_handicap_stones=[]
+		self.history=[]
+
+	def consume_stderr(self):
+		while 1:
+			try:
+				err_line=self.process.stderr.readline()
+				if err_line:
+					self.stderr_queue.put(err_line)
+					try:
+						self.stderr_starting_queue.put(err_line,block=False)
+					except:
+						#no need to keep all those log in memory, so there is a limit at 100 lines
+						pass
+				else:
+					log("leaving consume_stderr thread")
+					return
+			except Exception, e:
+				log("leaving consume_stderr thread due to exception:")
+				log(e)
+				return
+
 	def quick_evaluation(self,color):
 		
 		if color==2:
@@ -186,118 +243,15 @@ class Ray_gtp(gtp):
 			log("\a") #let's make this annoying enough :)
 		return sequences
 
-class RaySettings(Frame):
-	def __init__(self,parent):
-		Frame.__init__(self,parent)
-		self.parent=parent
-		log("Initializing Ray setting interface")
-		
-		bot="Ray"
-		
-		row=0
-		Label(self,text=_("%s settings")%bot, font="-weight bold").grid(row=row,column=1,sticky=W)
-		row+=1
-		Label(self,text="").grid(row=row,column=1)
-		
-		row+=1
-		Label(self,text=_("Slow profile parameters")).grid(row=row,column=1,sticky=W)
-		row+=1
-		Label(self,text=_("Command")).grid(row=row,column=1,sticky=W)
-		SlowCommand = StringVar() 
-		SlowCommand.set(grp_config.get(bot,"SlowCommand"))
-		Entry(self, textvariable=SlowCommand, width=30).grid(row=row,column=2)
-		row+=1
-		Label(self,text=_("Parameters")).grid(row=row,column=1,sticky=W)
-		SlowParameters = StringVar() 
-		SlowParameters.set(grp_config.get(bot,"SlowParameters"))
-		Entry(self, textvariable=SlowParameters, width=30).grid(row=row,column=2)
-		row+=1
-		Button(self, text=_("Test"),command=lambda: self.parent.parent.test(Ray_gtp,"slow")).grid(row=row,column=1,sticky=W)
-		
-		row+=1
-		Label(self,text="").grid(row=row,column=1)
-		row+=1
-		Label(self,text=_("Fast profile parameters")).grid(row=row,column=1,sticky=W)
-		row+=1
-		
-		row+=1
-		Label(self,text=_("Command")).grid(row=row,column=1,sticky=W)
-		FastCommand = StringVar() 
-		FastCommand.set(grp_config.get(bot,"FastCommand"))
-		Entry(self, textvariable=FastCommand, width=30).grid(row=row,column=2)
-		row+=1
-		Label(self,text=_("Parameters")).grid(row=row,column=1,sticky=W)
-		FastParameters = StringVar() 
-		FastParameters.set(grp_config.get(bot,"FastParameters"))
-		Entry(self, textvariable=FastParameters, width=30).grid(row=row,column=2)
-		row+=1
-		Button(self, text=_("Test"),command=lambda: self.parent.parent.test(Ray_gtp,"fast")).grid(row=row,column=1,sticky=W)
 
+class RaySettings(BotProfiles):
+	def __init__(self,parent,bot="Ray"):
+		BotProfiles.__init__(self,parent,bot)
+		self.bot_gtp=Ray_gtp
 
-		row+=1
-		Label(self,text="").grid(row=row,column=1)
-		row+=1
-		Label(self,text=_("%s availability")%bot).grid(row=row,column=1,sticky=W)
-		row+=1
-		
-		value={"slow":_("Slow profile"),"fast":_("Fast profile"),"both":_("Both profiles"),"none":_("None")}
-		
-		Label(self,text=_("Static analysis")).grid(row=row,column=1,sticky=W)
-		analysis_bot = StringVar()
-		analysis_bot.set(value[grp_config.get(bot,"AnalysisBot")])
-		OptionMenu(self,analysis_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
-		
-		row+=1
-		Label(self,text=_("Live analysis")).grid(row=row,column=1,sticky=W)
-		liveanalysis_bot = StringVar()
-		liveanalysis_bot.set(value[grp_config.get(bot,"LiveAnalysisBot")])
-		OptionMenu(self,liveanalysis_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
-		
-		row+=1
-		Label(self,text=_("Live analysis as black or white")).grid(row=row,column=1,sticky=W)
-		liveplayer_bot = StringVar()
-		liveplayer_bot.set(value[grp_config.get(bot,"LivePlayerBot")])
-		OptionMenu(self,liveplayer_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
-		
-		row+=1
-		Label(self,text=_("When opening a position for manual play")).grid(row=row,column=1,sticky=W)
-		review_bot = StringVar()
-		review_bot.set(value[grp_config.get(bot,"ReviewBot")])
-		OptionMenu(self,review_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
-		
-		
-		self.SlowCommand=SlowCommand
-		self.SlowParameters=SlowParameters
-		self.FastCommand=FastCommand
-		self.FastParameters=FastParameters
-		
-		self.analysis_bot=analysis_bot
-		self.liveanalysis_bot=liveanalysis_bot
-		self.liveplayer_bot=liveplayer_bot
-		self.review_bot=review_bot
-	
-	def save(self):
-		log("Saving Ray settings")
-		
-		bot="Ray"
-		
-		grp_config.set(bot,"SlowCommand",self.SlowCommand.get())
-		grp_config.set(bot,"SlowParameters",self.SlowParameters.get())
-		grp_config.set(bot,"FastCommand",self.FastCommand.get())
-		grp_config.set(bot,"FastParameters",self.FastParameters.get())
-		
-		value={_("Slow profile"):"slow",_("Fast profile"):"fast",_("Both profiles"):"both",_("None"):"none"}
-		
-		grp_config.set(bot,"AnalysisBot",value[self.analysis_bot.get()])
-		grp_config.set(bot,"LiveanalysisBot",value[self.liveanalysis_bot.get()])
-		grp_config.set(bot,"LivePlayerBot",value[self.liveplayer_bot.get()])
-		grp_config.set(bot,"ReviewBot",value[self.review_bot.get()])
-		
-		if self.parent.parent.refresh!=None:
-			self.parent.parent.refresh()
 
 class RayOpenMove(BotOpenMove):
-	def __init__(self,sgf_g,profile="slow"):
+	def __init__(self,sgf_g,profile):
 		BotOpenMove.__init__(self,sgf_g,profile)
 		self.name='Ray'
 		self.my_starting_procedure=ray_starting_procedure
@@ -315,52 +269,4 @@ Ray['runanalysis']=RunAnalysis
 Ray['starting']=ray_starting_procedure
 
 if __name__ == "__main__":
-	if len(argv)==1:
-		temp_root = Tk()
-		filename = open_sgf_file(parent=temp_root)
-		temp_root.destroy()
-		log(filename)
-		log("gamename:",filename[:-4])
-		if not filename:
-			sys.exit()
-		log("filename:",filename)
-		
-		top = Application()
-		bot=Ray
-		
-		slowbot=bot
-		slowbot['profile']="slow"
-		fastbot=dict(bot)
-		fastbot['profile']="fast"
-		popup=RangeSelector(top,filename,bots=[slowbot, fastbot])
-		top.add_popup(popup)
-		top.mainloop()
-	else:
-		try:
-			parameters=getopt.getopt(argv[1:], '', ['no-gui','range=', 'color=', 'komi=',"variation=", "profil="])
-		except Exception, e:
-			show_error(unicode(e)+"\n"+usage)
-			sys.exit()
-		
-		if not parameters[1]:
-			show_error("SGF file missing\n"+usage)
-			sys.exit()
-		
-		app=None
-		batch=[]
-		
-		for filename in parameters[1]:
-			move_selection,intervals,variation,komi,nogui,profil=parse_command_line(filename,parameters[0])
-			filename2=".".join(filename.split(".")[:-1])+".rsgf"
-			if nogui:
-				popup=RunAnalysis("no-gui",[filename,filename2],move_selection,intervals,variation-1,komi,profil)
-				popup.terminate_bot()
-			else:
-				if not app:
-					app = Application()
-				one_analysis=[RunAnalysis,[filename,filename2],move_selection,intervals,variation-1,komi,profil]
-				batch.append(one_analysis)
-	
-		if not nogui:
-			app.after(100,lambda: batch_analysis(app,batch))
-			app.mainloop()
+	main(Ray)

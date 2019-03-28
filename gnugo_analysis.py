@@ -2,16 +2,7 @@
 from __future__ import unicode_literals
 
 from gtp import gtp
-import sys
-from gomill import sgf, sgf_moves
-from sys import exit,argv
 from Tkinter import *
-import os
-import time, os
-
-import ttk
-
-
 from toolbox import *
 from toolbox import _
 
@@ -31,9 +22,9 @@ def get_full_sequence(worker,current_color,deepness):
 				answer=worker.play_white()
 				current_color="b"
 			sequence+=answer+" "
-			if answer.lower()=='resign':
+			if answer=='RESIGN':
 				break
-			if answer.lower()=='pass':
+			if answer=='PASS':
 				undos+=1
 				break
 			undos+=1
@@ -93,7 +84,7 @@ class GnuGoAnalysis():
 			log("\t",one_top_move)
 		log()
 		top_moves=top_moves[:min(self.nb_variations,self.maxvariations)]
-		if (answer.lower() not in ["pass","resign"]):
+		if (answer not in ["PASS","RESIGN"]):
 			gnugo.undo()
 			
 			while len(top_moves)>0:
@@ -134,7 +125,7 @@ class GnuGoAnalysis():
 					current_color=player_color
 					first_move=True
 					for one_deep_move in one_sequence.split(' '):
-						if one_deep_move.lower() not in ['resign','pass']:
+						if one_deep_move not in ['RESIGN','PASS']:
 							i,j=gtp2ij(one_deep_move)
 							new_child=previous_move.new_child()
 							node_set(new_child,current_color,(i,j))
@@ -153,21 +144,34 @@ class GnuGoAnalysis():
 		
 		log("Creating the influence map")
 		black_influence=gnugo.get_gnugo_initial_influence_black()
+		black_territories_points=[]
 		black_influence_points=[]
 		white_influence=gnugo.get_gnugo_initial_influence_white()
+		white_territories_points=[]
 		white_influence_points=[]
 		for i in range(self.size):
 			for j in range(self.size):
 				if black_influence[i][j]==-3:
-					black_influence_points.append([i,j])
+					black_territories_points.append([i,j])
 				if white_influence[i][j]==3:
+					white_territories_points.append([i,j])
+				
+				if black_influence[i][j]==-2:
+					black_influence_points.append([i,j])
+				if white_influence[i][j]==2:
 					white_influence_points.append([i,j])
 
 		if black_influence_points!=[]:
-			node_set(one_move.parent,"TB",black_influence_points)
-		
+			node_set(one_move,"IBM",black_influence_points) #IBM: influence black map
+			
+		if black_territories_points!=[]:
+			node_set(one_move,"TBM",black_territories_points) #TBM: territories black map
+			
 		if white_influence_points!=[]:
-			node_set(one_move.parent,"TW",white_influence_points)
+			node_set(one_move,"IWM",white_influence_points) #IWM: influence white map
+			
+		if white_territories_points!=[]:
+			node_set(one_move,"TWM",white_territories_points) #TWM: territories white map
 		
 		return answer #returning the best move, necessary for live analysis
 	
@@ -197,15 +201,17 @@ class GnuGoAnalysis():
 		
 		self.nb_variations=4
 		try:
-			self.nb_variations=int(grp_config.get("GnuGo", "variations"))
+			self.nb_variations=int(self.profile["variations"])
 		except:
-			grp_config.set("GnuGo", "variations",self.nb_variations)
+			pass
+			#grp_config.set("GnuGo", "variations",self.nb_variations)"""
 		
 		self.deepness=4
 		try:
-			self.deepness=int(grp_config.get("GnuGo", "deepness"))
+			self.deepness=int(self.profile["deepness"])
 		except:
-			grp_config.set("GnuGo", "deepness",self.deepness)
+			pass
+			#grp_config.set("GnuGo", "deepness",self.deepness)"""
 		
 		gnugo=gnugo_starting_procedure(self.g,self.profile)
 		self.nb_workers=self.nb_variations
@@ -222,7 +228,7 @@ class GnuGoAnalysis():
 		self.time_per_move=0
 		return gnugo
 
-def gnugo_starting_procedure(sgf_g,profile="slow",silentfail=False):
+def gnugo_starting_procedure(sgf_g,profile,silentfail=False):
 	return bot_starting_procedure("GnuGo","GNU Go",GnuGo_gtp,sgf_g,profile,silentfail)
 
 
@@ -312,136 +318,120 @@ class GnuGo_gtp(gtp):
 		return answer[2:]
 
 
-class GnuGoSettings(Frame):
-
-	def __init__(self,parent):
+class GnuGoSettings(BotProfiles):
+	def __init__(self,parent,bot="GnuGo"):
 		Frame.__init__(self,parent)
 		self.parent=parent
-		log("Initializing GnuGo setting interface")
-		bot="GnuGo"
-		row=0
-		Label(self,text=_("%s settings")%bot, font="-weight bold").grid(row=row,column=1,sticky=W)
+		self.bot=bot
+		self.profiles=get_bot_profiles(bot,False)
+		profiles_frame=self
 		
-		row+=1
-		Label(self,text="").grid(row=row,column=1)
-		row+=1
-		Label(self,text=_("Parameters for the analysis")).grid(row=row,column=1,sticky=W)
-		row+=1
-		Label(self,text=_("Maximum number of variations")).grid(row=row,column=1,sticky=W)
-		Variations = StringVar()
-		Variations.set(grp_config.get(bot,"Variations"))
-		Entry(self, textvariable=Variations, width=30).grid(row=row,column=2)
-		row+=1
-		Label(self,text=_("Deepness for each variation")).grid(row=row,column=1,sticky=W)
-		Deepness = StringVar() 
-		Deepness.set(grp_config.get(bot,"Deepness"))
-		Entry(self, textvariable=Deepness, width=30).grid(row=row,column=2)
+		self.listbox = Listbox(profiles_frame)
+		self.listbox.grid(column=10,row=10,rowspan=10)
+		self.update_listbox()
 		
-		
-		row+=1
-		Label(self,text="").grid(row=row,column=1)
-		row+=1
-		Label(self,text=_("Slow profile parameters")).grid(row=row,column=1,sticky=W)
-		row+=1
-		Label(self,text=_("Command")).grid(row=row,column=1,sticky=W)
-		SlowCommand = StringVar() 
-		SlowCommand.set(grp_config.get(bot,"SlowCommand"))
-		Entry(self, textvariable=SlowCommand, width=30).grid(row=row,column=2)
-		row+=1
-		Label(self,text=_("Parameters")).grid(row=row,column=1,sticky=W)
-		SlowParameters = StringVar() 
-		SlowParameters.set(grp_config.get(bot,"SlowParameters"))
-		Entry(self, textvariable=SlowParameters, width=30).grid(row=row,column=2)
-		row+=1
-		Button(self, text=_("Test"),command=lambda: self.parent.parent.test(GnuGo_gtp,"slow")).grid(row=row,column=1,sticky=W)
-		
-		row+=1
-		Label(self,text="").grid(row=row,column=1)
-		row+=1
-		Label(self,text=_("Fast profile parameters")).grid(row=row,column=1,sticky=W)
+		row=10
+		Label(profiles_frame,text=_("Profile")).grid(row=row,column=11,sticky=W)
+		self.profile = StringVar()
+		Entry(profiles_frame, textvariable=self.profile, width=30).grid(row=row,column=12)
 
 		row+=1
-		Label(self,text=_("Command")).grid(row=row,column=1,sticky=W)
-		FastCommand = StringVar() 
-		FastCommand.set(grp_config.get(bot,"FastCommand"))
-		Entry(self, textvariable=FastCommand, width=30).grid(row=row,column=2)
-		row+=1
-		Label(self,text=_("Parameters")).grid(row=row,column=1,sticky=W)
-		FastParameters = StringVar() 
-		FastParameters.set(grp_config.get(bot,"FastParameters"))
-		Entry(self, textvariable=FastParameters, width=30).grid(row=row,column=2)
-		row+=1
-		Button(self, text=_("Test"),command=lambda: self.parent.parent.test(GnuGo_gtp,"fast")).grid(row=row,column=1,sticky=W)
+		Label(profiles_frame,text=_("Command")).grid(row=row,column=11,sticky=W)
+		self.command = StringVar() 
+		Entry(profiles_frame, textvariable=self.command, width=30).grid(row=row,column=12)
 		
 		row+=1
-		Label(self,text="").grid(row=row,column=1)
+		Label(profiles_frame,text=_("Parameters")).grid(row=row,column=11,sticky=W)
+		self.parameters = StringVar()
+		Entry(profiles_frame, textvariable=self.parameters, width=30).grid(row=row,column=12)
+
 		row+=1
-		Label(self,text=_("%s availability")%bot).grid(row=row,column=1,sticky=W)
-		row+=1
-		
-		value={"slow":_("Slow profile"),"fast":_("Fast profile"),"both":_("Both profiles"),"none":_("None")}
-		
-		Label(self,text=_("Static analysis")).grid(row=row,column=1,sticky=W)
-		analysis_bot = StringVar()
-		analysis_bot.set(value[grp_config.get(bot,"AnalysisBot")])
-		OptionMenu(self,analysis_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
+		Label(profiles_frame,text=_("Maximum number of variations")).grid(row=row,column=11,sticky=W)
+		self.variations = StringVar()
+		Entry(profiles_frame, textvariable=self.variations, width=30).grid(row=row,column=12)
 		
 		row+=1
-		Label(self,text=_("Live analysis")).grid(row=row,column=1,sticky=W)
-		liveanalysis_bot = StringVar()
-		liveanalysis_bot.set(value[grp_config.get(bot,"LiveAnalysisBot")])
-		OptionMenu(self,liveanalysis_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
-		
-		row+=1
-		Label(self,text=_("Live analysis as black or white")).grid(row=row,column=1,sticky=W)
-		liveplayer_bot = StringVar()
-		liveplayer_bot.set(value[grp_config.get(bot,"LivePlayerBot")])
-		OptionMenu(self,liveplayer_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
-		
-		row+=1
-		Label(self,text=_("When opening a position for manual play")).grid(row=row,column=1,sticky=W)
-		review_bot = StringVar()
-		review_bot.set(value[grp_config.get(bot,"ReviewBot")])
-		OptionMenu(self,review_bot,_("Slow profile"),_("Fast profile"),_("Both profiles"),_("None")).grid(row=row,column=2,sticky=W)
+		Label(profiles_frame,text=_("Deepness for each variation")).grid(row=row,column=11,sticky=W)
+		self.deepness = StringVar()
+		Entry(profiles_frame, textvariable=self.deepness, width=30).grid(row=row,column=12)
 		
 
-		self.SlowCommand=SlowCommand
-		self.SlowParameters=SlowParameters
-		self.Variations=Variations
-		self.Deepness=Deepness
-		self.FastCommand=FastCommand
-		self.FastParameters=FastParameters
+		row+=10
+		buttons_frame=Frame(profiles_frame)
+		buttons_frame.grid(row=row,column=10,sticky=W,columnspan=3)
+		Button(buttons_frame, text=_("Add profile"),command=self.add_profile).grid(row=row,column=1,sticky=W)
+		Button(buttons_frame, text=_("Modify profile"),command=self.modify_profile).grid(row=row,column=2,sticky=W)
+		Button(buttons_frame, text=_("Delete profile"),command=self.delete_profile).grid(row=row,column=3,sticky=W)
+		Button(buttons_frame, text=_("Test"),command=lambda: self.parent.parent.test(self.bot_gtp,self.command,self.parameters)).grid(row=row,column=4,sticky=W)
+		self.listbox.bind("<Button-1>", lambda e: self.after(100,self.change_selection))
 		
-		self.analysis_bot=analysis_bot
-		self.liveanalysis_bot=liveanalysis_bot
-		self.liveplayer_bot=liveplayer_bot
-		self.review_bot=review_bot
+		self.index=-1
 		
-	def save(self):
-		log("Saving GnuGo settings")
-		
-		bot="GnuGo"
-		
-		grp_config.set(bot,"SlowCommand",self.SlowCommand.get())
-		grp_config.set(bot,"SlowParameters",self.SlowParameters.get())
-		grp_config.set(bot,"Variations",self.Variations.get())
-		grp_config.set(bot,"Deepness",self.Deepness.get())
-		grp_config.set(bot,"FastCommand",self.FastCommand.get())
-		grp_config.set(bot,"FastParameters",self.FastParameters.get())
-		
-		value={_("Slow profile"):"slow",_("Fast profile"):"fast",_("Both profiles"):"both",_("None"):"none"}
-		
-		grp_config.set(bot,"AnalysisBot",value[self.analysis_bot.get()])
-		grp_config.set(bot,"LiveanalysisBot",value[self.liveanalysis_bot.get()])
-		grp_config.set(bot,"LivePlayerBot",value[self.liveplayer_bot.get()])
-		grp_config.set(bot,"ReviewBot",value[self.review_bot.get()])
-				
+		self.bot_gtp=GnuGo_gtp
 
-		if self.parent.parent.refresh!=None:
-			self.parent.parent.refresh()
+		
+	def clear_selection(self):
+		self.index=-1
+		self.profile.set("")
+		self.command.set("")
+		self.parameters.set("")
+		self.variations.set("")
+		self.deepness.set("")
+
+	def change_selection(self):
+		try:
+			index=self.listbox.curselection()[0]
+			self.index=index
+		except:
+			log("No selection")
+			self.clear_selection()
+			return
+		data=self.profiles[index]
+		self.profile.set(data["profile"])
+		self.command.set(data["command"])
+		self.parameters.set(data["parameters"])
+		self.variations.set(data["variations"])
+		self.deepness.set(data["deepness"])
+		
+	def add_profile(self):
+		profiles=self.profiles
+		if self.profile.get()=="":
+			return
+		data={"bot":self.bot}
+		data["profile"]=self.profile.get()
+		data["command"]=self.command.get()
+		data["parameters"]=self.parameters.get()
+		data["variations"]=self.variations.get()
+		data["deepness"]=self.deepness.get()
+		
+		self.empty_profiles()
+		profiles.append(data)
+		self.create_profiles()
+		self.clear_selection()
+		
+	def modify_profile(self):
+		profiles=self.profiles
+		if self.profile.get()=="":
+			return
+		
+		if self.index<0:
+			log("No selection")
+			return
+		index=self.index
+		
+		profiles[index]["profile"]=self.profile.get()
+		profiles[index]["command"]=self.command.get()
+		profiles[index]["parameters"]=self.parameters.get()
+		profiles[index]["variations"]=self.variations.get()
+		profiles[index]["deepness"]=self.deepness.get()
+		
+		self.empty_profiles()
+		self.create_profiles()
+		self.clear_selection()
+		
 
 class GnuGoOpenMove(BotOpenMove):
-	def __init__(self,sgf_g,profile="slow"):
+	def __init__(self,sgf_g,profile):
 		BotOpenMove.__init__(self,sgf_g,profile)
 		self.name='Gnugo'
 		self.my_starting_procedure=gnugo_starting_procedure
@@ -458,54 +448,5 @@ GnuGo['liveanalysis']=LiveAnalysis
 GnuGo['runanalysis']=RunAnalysis
 GnuGo['starting']=gnugo_starting_procedure
 
-import getopt
 if __name__ == "__main__":
-	if len(argv)==1:
-		temp_root = Tk()
-		filename = open_sgf_file(parent=temp_root)
-		temp_root.destroy()
-		log(filename)
-		log("gamename:",filename[:-4])
-		if not filename:
-			sys.exit()
-		log("filename:",filename)
-		
-		top = Application()
-		bot=GnuGo
-		
-		slowbot=bot
-		slowbot['profile']="slow"
-		fastbot=dict(bot)
-		fastbot['profile']="fast"
-		popup=RangeSelector(top,filename,bots=[slowbot, fastbot])
-		top.add_popup(popup)
-		top.mainloop()
-	else:
-		try:
-			parameters=getopt.getopt(argv[1:], '', ['no-gui','range=', 'color=', 'komi=',"variation=", "profil="])
-		except Exception, e:
-			show_error(unicode(e)+"\n"+usage)
-			sys.exit()
-		
-		if not parameters[1]:
-			show_error("SGF file missing\n"+usage)
-			sys.exit()
-		
-		app=None
-		batch=[]
-		
-		for filename in parameters[1]:
-			move_selection,intervals,variation,komi,nogui,profil=parse_command_line(filename,parameters[0])
-			filename2=".".join(filename.split(".")[:-1])+".rsgf"
-			if nogui:
-				popup=RunAnalysis("no-gui",[filename,filename2],move_selection,intervals,variation-1,komi,profil)
-				popup.terminate_bot()
-			else:
-				if not app:
-					app = Application()
-				one_analysis=[RunAnalysis,[filename,filename2],move_selection,intervals,variation-1,komi,profil]
-				batch.append(one_analysis)
-	
-		if not nogui:
-			app.after(100,lambda: batch_analysis(app,batch))
-			app.mainloop()
+	main(GnuGo)
