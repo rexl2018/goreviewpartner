@@ -2,6 +2,8 @@
 from __future__ import unicode_literals
 from traceback import format_exc
 
+import canvasvg
+
 class GRPException(Exception):
 	def __init__(self,msg):
 		if type(msg)==type(u"abc"):
@@ -2037,6 +2039,32 @@ except Exception, e:
 import mss
 import mss.tools
 def canvas2png(goban,filename):
+	doc = canvasvg.SVGdocument()
+	doc.documentElement.setAttribute('width', str(int(goban.winfo_width())))
+	doc.documentElement.setAttribute('height', str(int(goban.winfo_height())))
+	max_width = int(doc.documentElement.getAttribute('width'))
+	max_height = int(doc.documentElement.getAttribute('height'))
+	
+	for element in canvasvg.convert(doc, goban):
+		if element.getAttribute('font-family') == 'Arial':
+			y_value = float(element.getAttribute('y'))
+			element.setAttribute('y', str(y_value-1.5))
+			
+		cxt = element.getAttribute('cx')+element.getAttribute('x1')+element.getAttribute('x')
+		cyt = element.getAttribute('cy')+element.getAttribute('y1')+element.getAttribute('y')
+		cx=0.01
+		cy=0.01
+		if cxt!='':
+			cx=float(cxt)
+		if cyt!='':
+			cy=float(cyt)	
+		
+		if not (cx<-0.01 or cx>max_width*2 or cy<-0.01 or cy>max_height*2):
+			doc.documentElement.appendChild(element)
+
+	f = open(filename + '.svg', 'w')
+	f.write(doc.toprettyxml())
+	f.close()
 	top = goban.winfo_rooty()
 	left = goban.winfo_rootx()
 	width = goban.winfo_width()

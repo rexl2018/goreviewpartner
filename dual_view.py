@@ -2428,7 +2428,7 @@ class DualView(Toplevel):
 		canvas2png(goban,filename)
 
 	def save_right_as_png(self,event=None):
-		goban=self.right_game_goban
+		goban=self.right_bot_goban
 		goban.parent=self
 		self.leaving_var=False
 		filename = save_png_file(parent=self,filename=os.path.splitext(self.filename)[0]+'_'+str(self.current_move)+'_v.png')
